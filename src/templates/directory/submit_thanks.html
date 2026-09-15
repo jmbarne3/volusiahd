@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block title %}Thank you — {{ site_name }}{% endblock %}
+
+{% block content %}
+<h1>Thank you</h1>
+<p class="lede">We have your suggestion. Someone reads every one, so it may be a few days before it appears.</p>
+<p><a href="{% url 'directory:program_list' %}">Back to the directory</a></p>
+{% endblock %}

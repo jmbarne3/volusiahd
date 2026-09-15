@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+  <h1>Homeschool programs in Volusia County</h1>
+  <p class="lede">Co-ops, classes, sports, arts, testing, and support groups — {{ program_count }} program{{ program_count|pluralize }} in one place.</p>
+  <form class="search" action="{% url 'directory:program_list' %}">
+    <label for="q">Search programs</label>
+    <input type="search" id="q" name="q" placeholder="Co-op, algebra, soccer…">
+    <button type="submit">Search</button>
+  </form>
+</section>
+
+<section>
+  <h2>Browse by category</h2>
+  <ul class="categories">
+    {% for category in categories %}
+      <li><a href="{{ category.get_absolute_url }}">{{ category.name }}</a></li>
+    {% empty %}
+      <li>No categories yet.</li>
+    {% endfor %}
+  </ul>
+</section>
+
+{% if featured %}
+<section>
+  <h2>Featured</h2>
+  {% include "directory/_program_cards.html" with programs=featured %}
+</section>
+{% endif %}
+{% endblock %}

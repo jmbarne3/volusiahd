@@ -1,0 +1,50 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ site_name }}{% endblock %}</title>
+<meta name="description" content="{% block meta_description %}A directory of homeschool co-ops, classes, sports, and support groups in Volusia County, Florida.{% endblock %}">
+
+{% comment %}Most people will arrive from a link shared in a Facebook group, so
+these tags matter more than they usually would.{% endcomment %}
+<meta property="og:site_name" content="{{ site_name }}">
+<meta property="og:type" content="{% block og_type %}website{% endblock %}">
+<meta property="og:title" content="{% block og_title %}{{ site_name }}{% endblock %}">
+<meta property="og:description" content="{% block og_description %}{{ block.super }}{% endblock %}">
+<meta property="og:url" content="{{ site_base_url }}{{ request.path }}">
+{% block og_image %}{% endblock %}
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="{{ site_base_url }}{{ request.path }}">
+<link rel="stylesheet" href="{% static 'css/site.css' %}">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="{% url 'directory:home' %}">{{ site_name }}</a>
+    <nav>
+      <a href="{% url 'directory:program_list' %}">Programs</a>
+      {% for page in nav_pages %}<a href="{{ page.get_absolute_url }}">{{ page.title }}</a>{% endfor %}
+      <a class="cta" href="{% url 'directory:submit' %}">Suggest a program</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="wrap">
+  {% if messages %}
+    {% for message in messages %}<p class="flash {{ message.tags }}">{{ message }}</p>{% endfor %}
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p>{{ site_name }}. Programs are listed without regard to affiliation; please ask each program directly about its approach.</p>
+    <p><a href="{% url 'directory:submit' %}">Suggest a program</a></p>
+  </div>
+</footer>
+</body>
+</html>

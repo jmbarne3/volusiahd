@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}{% if active_category %}{{ active_category.name }}{% else %}Programs{% endif %} — {{ site_name }}{% endblock %}
+{% block og_title %}{% if active_category %}{{ active_category.name }}{% else %}Programs{% endif %} — {{ site_name }}{% endblock %}
+
+{% block content %}
+<h1>{% if active_category %}{{ active_category.name }}{% elif query %}Results for “{{ query }}”{% else %}All programs{% endif %}</h1>
+{% if active_category.description %}<p class="lede">{{ active_category.description }}</p>{% endif %}
+
+<form class="search" action="{% url 'directory:program_list' %}">
+  <label for="q">Search programs</label>
+  <input type="search" id="q" name="q" value="{{ query }}">
+  {% if active_category %}<input type="hidden" name="category" value="{{ active_category.slug }}">{% endif %}
+  <button type="submit">Search</button>
+</form>
+
+<nav class="filters">
+  <a href="{% url 'directory:program_list' %}"{% if not active_category %} class="active"{% endif %}>All</a>
+  {% for category in categories %}
+    <a href="{{ category.get_absolute_url }}"{% if category == active_category %} class="active"{% endif %}>{{ category.name }}</a>
+  {% endfor %}
+</nav>
+
+{% include "directory/_program_cards.html" %}
+{% endblock %}

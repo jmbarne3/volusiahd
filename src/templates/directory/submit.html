@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}Suggest a program — {{ site_name }}{% endblock %}
+{% block og_title %}Suggest a program{% endblock %}
+
+{% block content %}
+<h1>Suggest a program</h1>
+<p class="lede">Know a co-op, class, team, or support group that should be listed? Tell us about it. We check each suggestion before it appears.</p>
+
+<form method="post" class="stack">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Send suggestion</button>
+</form>
+{% endblock %}

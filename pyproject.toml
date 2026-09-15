@@ -1,0 +1,36 @@
+[project]
+name = "volusiahd"
+version = "0.1.0"
+description = "Volusia County Homeschool Directory"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    { name = "Jim Barnes", email = "james.barnes@ucf.edu" }
+]
+dependencies = [
+    "django>=5.2,<6.0",
+    "django-environ>=0.12",
+    "django-unfold>=0.62",
+    "django-prose-editor>=0.13",
+    "nh3>=0.2.20",
+    "whitenoise>=6.9",
+    "gunicorn>=23.0",
+    "pillow>=11.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14",
+    "django-stubs>=5.2",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+src = ["src"]
+extend-exclude = ["*/migrations/*"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "DJ", "B"]

@@ -1,0 +1,90 @@
+/* Deliberately small and hand-written. No build step, no framework: this file
+   should still be editable in 2031 by whoever inherits it. */
+
+:root {
+  --ink: #1a1a1a;
+  --muted: #5a5a5a;
+  --line: #e2e2e2;
+  --accent: #0369a1;
+  --bg: #ffffff;
+  --soft: #f6f8fa;
+  --wrap: 68rem;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: var(--bg);
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.wrap { max-width: var(--wrap); margin: 0 auto; padding: 0 1.25rem; }
+
+a { color: var(--accent); }
+
+.skip { position: absolute; left: -9999px; }
+.skip:focus { left: 1rem; top: 1rem; background: #fff; padding: .5rem 1rem; z-index: 10; }
+
+.site-header { border-bottom: 1px solid var(--line); background: var(--bg); }
+.site-header .wrap { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; padding-block: 1rem; }
+.brand { font-weight: 700; font-size: 1.05rem; text-decoration: none; color: var(--ink); }
+.site-header nav { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
+.site-header nav a { text-decoration: none; }
+.cta { background: var(--accent); color: #fff; padding: .45rem .9rem; border-radius: .375rem; }
+
+main { padding-block: 2.5rem 4rem; }
+
+h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 .5rem; }
+h2 { font-size: 1.35rem; margin: 2.5rem 0 1rem; }
+h3 { font-size: 1.1rem; margin: 0 0 .35rem; }
+.lede { font-size: 1.125rem; color: var(--muted); margin-top: 0; }
+
+.search { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1.5rem 0; }
+.search label { position: absolute; left: -9999px; }
+.search input { flex: 1 1 18rem; padding: .6rem .75rem; border: 1px solid var(--line); border-radius: .375rem; font-size: 1rem; }
+.search button, form button { padding: .6rem 1.1rem; border: 0; border-radius: .375rem; background: var(--accent); color: #fff; font-size: 1rem; cursor: pointer; }
+
+.filters { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 2rem; }
+.filters a { text-decoration: none; padding: .3rem .7rem; border: 1px solid var(--line); border-radius: 999px; font-size: .9rem; color: var(--muted); }
+.filters a.active { background: var(--ink); border-color: var(--ink); color: #fff; }
+
+.categories { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: .5rem; }
+.categories a { display: block; padding: .5rem .9rem; background: var(--soft); border-radius: .375rem; text-decoration: none; }
+
+.program-list { list-style: none; padding: 0; display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); }
+.program-card { border: 1px solid var(--line); border-radius: .5rem; padding: 1.15rem; }
+.program-card h3 a { text-decoration: none; }
+.program-card p { margin: .35rem 0; }
+.meta { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; font-size: .85rem; color: var(--muted); }
+.tag { background: var(--soft); border-radius: 999px; padding: .15rem .6rem; text-decoration: none; color: var(--muted); }
+
+.program .logo { max-width: 160px; height: auto; }
+.prose { max-width: 42rem; }
+.prose h3 { margin-top: 1.75rem; }
+
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: .5rem 1.5rem; margin: 2rem 0; padding-top: 1.5rem; border-top: 1px solid var(--line); }
+.facts dt { font-weight: 600; color: var(--muted); }
+.facts dd { margin: 0; }
+@media (max-width: 34rem) { .facts { grid-template-columns: 1fr; gap: .15rem; } .facts dd { margin-bottom: .75rem; } }
+
+.verified { color: var(--muted); font-size: .9rem; }
+.crumb { font-size: .9rem; margin-bottom: 1rem; }
+
+.stack p { margin: 0 0 1.25rem; max-width: 34rem; }
+.stack label { display: block; font-weight: 600; margin-bottom: .25rem; }
+.stack input[type=text], .stack input[type=email], .stack input[type=url], .stack input[type=tel], .stack textarea {
+  width: 100%; padding: .6rem .75rem; border: 1px solid var(--line); border-radius: .375rem; font: inherit;
+}
+.stack .helptext { display: block; font-size: .875rem; color: var(--muted); margin-top: .25rem; }
+.stack ul { list-style: none; padding: 0; margin: .25rem 0; }
+.stack ul label { font-weight: 400; }
+
+.flash { padding: .75rem 1rem; border-radius: .375rem; background: var(--soft); border: 1px solid var(--line); }
+.flash.success { background: #ecfdf5; border-color: #a7f3d0; }
+.flash.error { background: #fef2f2; border-color: #fecaca; }
+
+.empty { color: var(--muted); }
+
+.site-footer { border-top: 1px solid var(--line); padding-block: 2rem; color: var(--muted); font-size: .9rem; }
