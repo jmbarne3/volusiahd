@@ -2,119 +2,441 @@
    should still be editable in 2031 by whoever inherits it. */
 
 :root {
-  --ink: #1a1a1a;
-  --muted: #5a5a5a;
-  --line: #e2e2e2;
-  --accent: #0369a1;
-  --bg: #ffffff;
-  --soft: #f6f8fa;
+  /* Palette. Warm, domestic, low-glare — a living room rather than an office.
+     Each colour has one job; do not invent new hex values further down. */
+  --cream: #f4f1ea;        /* page background */
+  --linen: #fcfaf5;        /* lifted surfaces: cards, header, inputs */
+  --sage: #7c9082;         /* calm accent: rules, tags, quiet panels */
+  --sage-deep: #52645a;    /* sage dark enough to carry light text */
+  --wall-sage: #e7ece4;    /* the second wall colour, at wall strength */
+  --sage-tint: #e4eae3;    /* sage at panel strength */
+  --honey: #c89d5a;        /* warm wood: accent rules and footer links */
+  --honey-tint: #f2e7d4;
+  --rust: #c86d51;         /* earthy pop: decorative only, too light for text */
+  --rust-deep: #9e4a31;    /* the same colour at text and button contrast */
+  --rust-darker: #8a3f29;  /* button hover */
+  --navy: #2e3e50;         /* body text, labels, footer ground */
+
+  --ink: var(--navy);
+  --muted: #5a6472;        /* 5.3:1 on cream — safe for help text */
+  --line: #e2dccd;
+  --line-strong: #d3cab4;
+  --bg: var(--cream);
+  --surface: var(--linen);
+  --accent: var(--rust-deep);
+
+  /* One spacing scale. Every margin below is drawn from it. */
+  --s-1: .25rem;
+  --s-2: .5rem;
+  --s-3: .75rem;
+  --s-4: 1rem;
+  --s-5: 1.5rem;
+  --s-6: 2rem;
+  --s-7: 3rem;
+  --s-8: 4rem;
+
+  /* Softer corners and a warm, low shadow. Both are doing the same job as
+     the wool rug and the linen curtain: taking the hard edge off. The shadow
+     is tinted navy rather than black — nothing in this room is black. */
+  --radius: .75rem;
+  --radius-sm: .5rem;
+  --radius-pill: 999px;
+  --lift: 0 1px 2px rgba(46, 62, 80, .05), 0 6px 16px -8px rgba(46, 62, 80, .14);
+  --lift-hover: 0 2px 4px rgba(46, 62, 80, .06), 0 12px 24px -10px rgba(46, 62, 80, .18);
+
+  --chip: #eae5d9;         /* the label stock every category tag is printed on */
   --wrap: 68rem;
+  --measure: 36rem;        /* comfortable reading width for body copy */
 }
+
+/* --- Category colour code -------------------------------------------------
+   The organising idea, borrowed from how people actually run a homeschool: a
+   coloured dot on the spine of the book, a strip of tape on the bin. The dot
+   carries the code; the label text stays one calm navy on every tag, so a row
+   of categories reads as a set rather than as nine competing colours.
+
+   Nine hues, evenly spaced 40 degrees apart, anchored on terracotta's own hue
+   so the ring passes through the palette's colours on its way round. Lightness
+   and chroma are identical for all nine (oklch L .56 / C .096) — only the hue
+   moves. That is what keeps them muted and of a family; a chroma of .096 is
+   roughly a third of a saturated colour. All nine clear 3.5:1 against the chip,
+   above the 3:1 WCAG floor for a graphical object, and none clips sRGB. */
+
+.c1 { --code: #a45f4a; }  /* terracotta  38deg — the palette's own */
+.c2 { --code: #936d2a; }  /* amber oak   78deg — near honey oak */
+.c3 { --code: #6f7c35; }  /* ochre olive 118deg */
+.c4 { --code: #3c855e; }  /* sage green  158deg — near muted sage */
+.c5 { --code: #008589; }  /* teal       198deg */
+.c6 { --code: #357ca6; }  /* slate blue 238deg — near navy slate */
+.c7 { --code: #676eac; }  /* periwinkle 278deg */
+.c8 { --code: #8c6299; }  /* plum       318deg */
+.c9 { --code: #a15b74; }  /* mulberry   358deg */
+.c-all { --code: var(--muted); }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
   color: var(--ink);
-  background: var(--bg);
-  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* Cream wall, with a linen weave sitting almost below the threshold of
+     noticing. Two hairline gratings at about 2% — enough to stop a large
+     field of cream reading as flat screen white, not enough to see. */
+  background-color: var(--bg);
+  background-image:
+    repeating-linear-gradient(90deg, rgba(46, 62, 80, .018) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(0deg,  rgba(46, 62, 80, .018) 0 1px, transparent 1px 3px);
+  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
-.wrap { max-width: var(--wrap); margin: 0 auto; padding: 0 1.25rem; }
+.wrap { max-width: var(--wrap); margin: 0 auto; padding-inline: var(--s-5); }
 
 a { color: var(--accent); }
+a:hover { color: var(--rust-darker); }
+
+:focus-visible {
+  outline: 2px solid var(--rust-deep);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
 
 .skip { position: absolute; left: -9999px; }
-.skip:focus { left: 1rem; top: 1rem; background: #fff; padding: .5rem 1rem; z-index: 10; }
+.skip:focus { left: var(--s-4); top: var(--s-4); background: var(--surface); padding: var(--s-2) var(--s-4); z-index: 10; }
 
-.site-header { border-bottom: 1px solid var(--line); background: var(--bg); }
-.site-header .wrap { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; padding-block: 1rem; }
-.brand { font-weight: 700; font-size: 1.05rem; text-decoration: none; color: var(--ink); }
-.site-header nav { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
-.site-header nav a { text-decoration: none; }
-.cta { background: var(--accent); color: #fff; padding: .45rem .9rem; border-radius: .375rem; }
+/* --- Frame --------------------------------------------------------------- */
 
-main { padding-block: 2.5rem 4rem; }
-
-h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 .5rem; }
-h2 { font-size: 1.35rem; margin: 2.5rem 0 1rem; }
-h3 { font-size: 1.1rem; margin: 0 0 .35rem; }
-.lede { font-size: 1.125rem; color: var(--muted); margin-top: 0; }
-
-.search { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1.5rem 0; }
-.search label { position: absolute; left: -9999px; }
-.search input { flex: 1 1 18rem; padding: .6rem .75rem; border: 1px solid var(--line); border-radius: .375rem; font-size: 1rem; }
-.search button, form button { padding: .6rem 1.1rem; border: 0; border-radius: .375rem; background: var(--accent); color: #fff; font-size: 1rem; cursor: pointer; }
-
-.filters { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 2rem; }
-.filters a { text-decoration: none; padding: .3rem .7rem; border: 1px solid var(--line); border-radius: 999px; font-size: .9rem; color: var(--muted); }
-.filters a.active { background: var(--ink); border-color: var(--ink); color: #fff; }
-
-.categories { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: .5rem; }
-.categories a { display: block; padding: .5rem .9rem; background: var(--soft); border-radius: .375rem; text-decoration: none; }
-
-.program-list { list-style: none; padding: 0; display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); }
-.program-card { border: 1px solid var(--line); border-radius: .5rem; padding: 1.15rem; }
-.program-card h3 a { text-decoration: none; }
-.program-card p { margin: .35rem 0; }
-.meta { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; font-size: .85rem; color: var(--muted); }
-.tag { background: var(--soft); border-radius: 999px; padding: .15rem .6rem; text-decoration: none; color: var(--muted); }
-
-.program .logo { max-width: 160px; height: auto; }
-.prose { max-width: 42rem; }
-.prose h3 { margin-top: 1.75rem; }
-
-.facts { display: grid; grid-template-columns: max-content 1fr; gap: .5rem 1.5rem; margin: 2rem 0; padding-top: 1.5rem; border-top: 1px solid var(--line); }
-.facts dt { font-weight: 600; color: var(--muted); }
-.facts dd { margin: 0; }
-@media (max-width: 34rem) { .facts { grid-template-columns: 1fr; gap: .15rem; } .facts dd { margin-bottom: .75rem; } }
-
-.verified { color: var(--muted); font-size: .9rem; }
-.crumb { font-size: .9rem; margin-bottom: 1rem; }
-
-.stack p { margin: 0 0 1.25rem; max-width: 34rem; }
-.stack label { display: block; font-weight: 600; margin-bottom: .25rem; }
-.stack input[type=text], .stack input[type=email], .stack input[type=url], .stack input[type=tel], .stack textarea {
-  width: 100%; padding: .6rem .75rem; border: 1px solid var(--line); border-radius: .375rem; font: inherit;
+.site-header {
+  background: var(--surface);
+  border-top: 3px solid var(--honey);
+  border-bottom: 1px solid var(--line);
 }
-.stack .helptext { display: block; font-size: .875rem; color: var(--muted); margin-top: .25rem; }
-.stack ul { list-style: none; padding: 0; margin: .25rem 0; }
-.stack ul label { font-weight: 400; }
+.site-header .wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3) var(--s-5);
+  align-items: center;
+  justify-content: space-between;
+  padding-block: var(--s-4);
+}
+.brand { font-weight: 700; font-size: 1.05rem; text-decoration: none; color: var(--navy); }
+.site-header nav { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-5); align-items: center; }
+.site-header nav a { text-decoration: none; color: var(--navy); }
+.site-header nav a:hover { color: var(--rust-deep); }
 
-.flash { padding: .75rem 1rem; border-radius: .375rem; background: var(--soft); border: 1px solid var(--line); }
-.flash.success { background: #ecfdf5; border-color: #a7f3d0; }
-.flash.error { background: #fef2f2; border-color: #fecaca; }
+.cta {
+  background: var(--rust-deep);
+  color: var(--linen) !important;
+  padding: .5rem 1rem;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+}
+.cta:hover { background: var(--rust-darker); color: var(--linen); }
+
+main { padding-block: var(--s-7) var(--s-8); }
+
+/* Vertical rhythm between top-level blocks, so no template has to carry its
+   own margins. Anything that follows a section is pushed down once. */
+main > section + section,
+main > article + section,
+main > section + article { margin-top: var(--s-7); }
+main > section > :last-child { margin-bottom: 0; }
+
+.site-footer {
+  /* The brief allows two wall colours. The header and body take the cream;
+     the footer takes the sage, which closes the page on the calm end of the
+     palette instead of on a slab of dark. Navy goes back to being what the
+     palette says it is: text, labels and metal. */
+  background: var(--wall-sage);
+  border-top: 1px solid var(--sage);
+  color: var(--navy);
+  padding-block: var(--s-6);
+  font-size: .9rem;
+}
+.site-footer a { color: var(--rust-deep); }
+.site-footer a:hover { color: var(--rust-darker); }
+.site-footer p { margin: 0 0 var(--s-2); max-width: 46rem; }
+.site-footer p:last-child { margin-bottom: 0; }
+
+/* --- Typography ---------------------------------------------------------- */
+
+h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 var(--s-3); }
+h2 { font-size: 1.4rem; line-height: 1.3; margin: 0 0 var(--s-4); }
+h3 { font-size: 1.1rem; line-height: 1.35; margin: 0 0 var(--s-2); }
+
+.lede {
+  font-size: 1.125rem;
+  color: var(--muted);
+  max-width: var(--measure);
+  margin: 0 0 var(--s-5);
+}
+
+.prose { max-width: var(--measure); }
+.prose > :first-child { margin-top: 0; }
+.prose > :last-child { margin-bottom: 0; }
+.prose p, .prose ul, .prose ol { margin: 0 0 var(--s-4); }
+.prose h2 { margin: var(--s-6) 0 var(--s-3); }
+.prose h3 { margin: var(--s-5) 0 var(--s-2); }
+
+/* --- Search and filters -------------------------------------------------- */
+
+.search { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: 0 0 var(--s-5); }
+.search label { position: absolute; left: -9999px; }
+.search input {
+  flex: 1 1 18rem;
+  padding: .6rem .8rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 1rem;
+}
+.search button,
+form button {
+  padding: .6rem 1.2rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--rust-deep);
+  color: var(--linen);
+  font-size: 1rem;
+  cursor: pointer;
+}
+.search button:hover,
+form button:hover { background: var(--rust-darker); }
+
+.filters { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: 0 0 var(--s-6); }
+.filters a {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  text-decoration: none;
+  padding: .35rem .8rem .35rem .65rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  font-size: .9rem;
+  color: var(--muted);
+  background: var(--surface);
+}
+.filters a::before {
+  content: "";
+  flex: none;
+  width: .45rem;
+  height: .45rem;
+  border-radius: 50%;
+  background: var(--code, var(--muted));
+}
+.filters a:hover { border-color: var(--code, var(--sage-deep)); color: var(--navy); }
+.filters a.active { background: var(--navy); border-color: var(--navy); color: var(--cream); }
+/* On the active chip the dot would sit on navy, where the muted codes lose
+   their contrast. Drop it and let the fill do the work. */
+.filters a.active::before { display: none; }
+.filters a.active { padding-left: .8rem; }
+
+/* A panel of the second wall colour. Contained and rounded rather than
+   full-bleed, so it reads as a rug or a pinboard in a cream room — the point
+   of the brief being a room you live in, not a corridor you pass through. */
+.wall-sage {
+  background: var(--wall-sage);
+  border-radius: var(--radius);
+  padding: var(--s-6);
+}
+@media (max-width: 34rem) { .wall-sage { padding: var(--s-5); } }
+
+.categories { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.categories a {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .55rem 1rem .55rem .85rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--navy);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+}
+.categories a::before {
+  content: "";
+  flex: none;
+  width: .6rem;
+  height: .6rem;
+  border-radius: 50%;
+  background: var(--code, var(--sage));
+}
+.categories a:hover { border-color: var(--code, var(--sage)); background: var(--cream); }
+
+/* --- Program cards ------------------------------------------------------- */
+
+.program-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--s-4);
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+}
+.program-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--honey);
+  border-radius: var(--radius);
+  padding: var(--s-5);
+  box-shadow: var(--lift);
+  transition: box-shadow .18s ease, transform .18s ease;
+}
+.program-card:hover {
+  box-shadow: var(--lift-hover);
+  transform: translateY(-2px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .program-card { transition: none; }
+  .program-card:hover { transform: none; }
+}
+.program-card h3 { margin: 0; }
+.program-card h3 a { text-decoration: none; color: var(--navy); }
+.program-card h3 a:hover { color: var(--rust-deep); }
+.program-card p { margin: 0; }
+.program-card .meta { margin-top: auto; padding-top: var(--s-2); }
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: center;
+  font-size: .85rem;
+  color: var(--muted);
+}
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  background: var(--chip);
+  border-radius: var(--radius-pill);
+  padding: .2rem .7rem .2rem .55rem;
+  text-decoration: none;
+  color: var(--muted);
+}
+/* The dot is the code. Everything else about a tag stays the same, which is
+   why nine of them in a row do not shout. */
+.tag::before {
+  content: "";
+  flex: none;
+  width: .5rem;
+  height: .5rem;
+  border-radius: 50%;
+  background: var(--code, var(--sage));
+}
+a.tag:hover { background: var(--sage-tint); color: var(--navy); }
 
 .empty { color: var(--muted); }
 
-.site-footer { border-top: 1px solid var(--line); padding-block: 2rem; color: var(--muted); font-size: .9rem; }
+/* --- Program detail ------------------------------------------------------ */
+
+.crumb { font-size: .9rem; margin: 0 0 var(--s-5); }
+.program .logo { max-width: 160px; height: auto; margin-bottom: var(--s-4); }
+.program .meta { margin: 0 0 var(--s-5); }
+.program .prose { margin-bottom: var(--s-6); }
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--s-3) var(--s-6);
+  margin: 0 0 var(--s-5);
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--line-strong);
+}
+.facts dt { font-weight: 600; color: var(--muted); }
+.facts dd { margin: 0; }
+@media (max-width: 34rem) {
+  .facts { grid-template-columns: 1fr; gap: var(--s-1); }
+  .facts dd { margin-bottom: var(--s-3); }
+}
+
+.verified { color: var(--muted); font-size: .9rem; margin: 0; }
+
+/* --- Callout ------------------------------------------------------------- */
+
+.callout {
+  background: var(--honey-tint);
+  border-left: 4px solid var(--honey);
+  border-radius: var(--radius);
+  padding: var(--s-5) var(--s-6);
+}
+.callout h2 { margin-top: 0; }
+.callout p { margin: 0 0 var(--s-4); max-width: var(--measure); }
+.callout p:last-child { margin-bottom: 0; }
+.callout .cta { display: inline-block; text-decoration: none; }
+
+/* --- Flash messages ------------------------------------------------------ */
+
+.flash {
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--radius-sm);
+  background: var(--sage-tint);
+  border: 1px solid var(--sage);
+  margin: 0 0 var(--s-5);
+}
+.flash.success { background: var(--sage-tint); border-color: var(--sage); }
+.flash.error { background: #f7e3dc; border-color: var(--rust); color: var(--rust-deep); }
 
 /* --- Public forms -------------------------------------------------------- */
 /* The registration form is long by design: the provider filling it in is the
    reason an administrator never has to retype anything. Grouping and breathing
    room are what keep it from feeling like a tax form. */
 
+.stack { max-width: var(--measure); }
+.stack > p { margin: 0 0 var(--s-5); }
+
 .form-long { max-width: 40rem; }
-.form-long fieldset { border: 0; border-top: 1px solid var(--line); padding: 1.5rem 0 0; margin: 2.5rem 0 0; }
-.form-long legend { font-weight: 700; font-size: 1.1rem; padding: 0; }
-.hint { color: var(--muted); font-size: .9rem; margin: .25rem 0 1.25rem; }
-
-.field { margin: 0 0 1.25rem; max-width: 34rem; }
-.field label, .field .group-label { display: block; font-weight: 600; margin-bottom: .25rem; }
-.field input[type=text], .field input[type=email], .field input[type=url],
-.field input[type=tel], .field input[type=number], .field input[type=file], .field textarea {
-  width: 100%; padding: .6rem .75rem; border: 1px solid var(--line); border-radius: .375rem; font: inherit;
+.form-long fieldset {
+  border: 0;
+  border-top: 1px solid var(--line-strong);
+  padding: var(--s-5) 0 0;
+  margin: var(--s-7) 0 0;
 }
-.field textarea { resize: vertical; }
-.field .helptext { display: block; font-size: .875rem; color: var(--muted); margin-top: .35rem; }
-.field ul { list-style: none; padding: 0; margin: .25rem 0 0; display: grid; gap: .3rem; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); }
-.field ul label { font-weight: 400; display: inline; }
+.form-long fieldset:first-of-type { margin-top: var(--s-6); }
+.form-long legend { font-weight: 700; font-size: 1.1rem; padding: 0; color: var(--navy); }
+.hint { color: var(--muted); font-size: .9rem; margin: var(--s-2) 0 var(--s-5); max-width: var(--measure); }
+.form-long legend + .hint { margin-top: var(--s-3); }
+
+.field { margin: 0 0 var(--s-5); max-width: var(--measure); }
+.field:last-child { margin-bottom: 0; }
+.field label, .field .group-label { display: block; font-weight: 600; margin-bottom: var(--s-1); }
+.stack label { display: block; font-weight: 600; margin-bottom: var(--s-1); }
+.field input[type=text], .field input[type=email], .field input[type=url],
+.field input[type=tel], .field input[type=number], .field input[type=file], .field textarea,
+.stack input[type=text], .stack input[type=email], .stack input[type=url],
+.stack input[type=tel], .stack textarea {
+  width: 100%;
+  padding: .6rem .8rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.field textarea { resize: vertical; min-height: 7rem; }
+.field .helptext, .stack .helptext {
+  display: block;
+  font-size: .875rem;
+  color: var(--muted);
+  margin-top: var(--s-2);
+}
+.field ul, .stack ul {
+  list-style: none;
+  padding: 0;
+  margin: var(--s-2) 0 0;
+  display: grid;
+  gap: var(--s-2);
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+}
+.field ul label, .stack ul label { font-weight: 400; display: inline; }
 .field-check label { display: inline; font-weight: 400; }
-.field .req { color: #b91c1c; }
+.field .req { color: var(--rust-deep); }
 
-.has-error input, .has-error textarea { border-color: #dc2626; }
-.field-error { color: #b91c1c; font-size: .9rem; margin: 0 0 .35rem; }
+.has-error input, .has-error textarea { border-color: var(--rust-deep); }
+.field-error { color: var(--rust-deep); font-size: .9rem; margin: 0 0 var(--s-2); }
 
-.callout { background: var(--soft); border-radius: .5rem; padding: 1.5rem; margin-top: 3rem; }
-.callout h2 { margin-top: 0; }
-.callout .cta { display: inline-block; text-decoration: none; }
+.form-actions { margin-top: var(--s-6); }
+.form-long .form-actions { border-top: 1px solid var(--line-strong); padding-top: var(--s-5); margin-top: var(--s-7); }
+.form-actions .hint { margin: var(--s-3) 0 0; }

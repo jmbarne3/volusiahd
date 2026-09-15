@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load directory_extras %}
 
 {% block title %}{% if active_category %}{{ active_category.name }}{% else %}Programs{% endif %} — {{ site_name }}{% endblock %}
 {% block og_title %}{% if active_category %}{{ active_category.name }}{% else %}Programs{% endif %} — {{ site_name }}{% endblock %}
@@ -15,9 +16,9 @@
 </form>
 
 <nav class="filters">
-  <a href="{% url 'directory:program_list' %}"{% if not active_category %} class="active"{% endif %}>All</a>
+  <a class="c-all{% if not active_category %} active{% endif %}" href="{% url 'directory:program_list' %}">All</a>
   {% for category in categories %}
-    <a href="{{ category.get_absolute_url }}"{% if category == active_category %} class="active"{% endif %}>{{ category.name }}</a>
+    <a class="c{{ category|colour_code }}{% if category == active_category %} active{% endif %}" href="{{ category.get_absolute_url }}">{{ category.name }}</a>
   {% endfor %}
 </nav>
 

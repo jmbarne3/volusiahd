@@ -1,10 +1,11 @@
+{% load directory_extras %}
 <ul class="program-list">
   {% for program in programs %}
     <li class="program-card">
       <h3><a href="{{ program.get_absolute_url }}">{{ program.name }}</a></h3>
       <p>{{ program.short_description }}</p>
       <p class="meta">
-        {% for category in program.categories.all %}<span class="tag">{{ category.name }}</span>{% endfor %}
+        {% for category in program.categories.all %}<span class="tag c{{ category|colour_code }}">{{ category.name }}</span>{% endfor %}
         {% if program.city %}<span class="where">{{ program.city }}</span>{% endif %}
       </p>
     </li>

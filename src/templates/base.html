@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f4f1ea">
 <title>{% block title %}{{ site_name }}{% endblock %}</title>
 <meta name="description" content="{% block meta_description %}A directory of homeschool co-ops, classes, sports, and support groups in Volusia County, Florida.{% endblock %}">
 
@@ -35,7 +36,9 @@ these tags matter more than they usually would.{% endcomment %}
 
 <main id="main" class="wrap">
   {% if messages %}
-    {% for message in messages %}<p class="flash {{ message.tags }}">{{ message }}</p>{% endfor %}
+    {% for message in messages %}
+      <p class="flash {{ message.tags }}">{{ message }}</p>
+    {% endfor %}
   {% endif %}
   {% block content %}{% endblock %}
 </main>
