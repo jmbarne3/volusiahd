@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% load directory_extras %}
+
+{% block title %}Register your program — {{ site_name }}{% endblock %}
+{% block og_title %}Register your program{% endblock %}
+{% block meta_description %}Run a homeschool co-op, class, team, or support group in Volusia County? Add it to the directory.{% endblock %}
+
+{% block content %}
+<h1>Register your program</h1>
+<p class="lede">Run a co-op, class, team, studio, or support group in Volusia County? Fill this in once and it goes in the directory. Everything below is what families will see on your page, so the more you tell us, the less we have to ask.</p>
+
+<form method="post" enctype="multipart/form-data" class="stack form-long" novalidate>
+  {% csrf_token %}
+  {{ form.website_url }}
+
+  {% if form.non_field_errors %}
+    <div class="flash error">{{ form.non_field_errors }}</div>
+  {% endif %}
+
+  <fieldset>
+    <legend>The basics</legend>
+    {% field form.program_name %}
+    {% field form.short_description %}
+    {% field form.description %}
+    {% field form.categories %}
+  </fieldset>
+
+  <fieldset>
+    <legend>How families reach you</legend>
+    <p class="hint">At least one of these is required.</p>
+    {% field form.website %}
+    {% field form.email %}
+    {% field form.phone %}
+  </fieldset>
+
+  <fieldset>
+    <legend>Where you meet</legend>
+    <p class="hint">Leave blank if you meet in different places, or would rather not publish an address.</p>
+    {% field form.street %}
+    {% field form.city %}
+    {% field form.zip_code %}
+  </fieldset>
+
+  <fieldset>
+    <legend>Who it is for, and when</legend>
+    {% field form.serves_grades %}
+    {% field form.age_min %}
+    {% field form.age_max %}
+    {% field form.meeting_schedule %}
+    {% field form.cost_notes %}
+  </fieldset>
+
+  <fieldset>
+    <legend>A person to contact</legend>
+    <p class="hint">Optional, and shown on your page only if you want it there.</p>
+    {% field form.contact_name %}
+    {% field form.contact_role %}
+    {% field form.contact_email %}
+    {% field form.contact_phone %}
+    {% field form.contact_is_public %}
+  </fieldset>
+
+  <fieldset>
+    <legend>Your logo</legend>
+    {% field form.logo %}
+  </fieldset>
+
+  <fieldset>
+    <legend>About you</legend>
+    <p class="hint">So we can follow up if something is unclear. Your details are never published.</p>
+    {% field form.submitter_name %}
+    {% field form.submitter_email %}
+    {% field form.submitter_role %}
+    {% field form.is_authorized %}
+  </fieldset>
+
+  <button type="submit">Register this program</button>
+  <p class="hint">We read every registration before it appears, usually within a few days.</p>
+</form>
+{% endblock %}

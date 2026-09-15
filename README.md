@@ -33,7 +33,7 @@ uv run python -c "import secrets; print(secrets.token_urlsafe(50))"
 ## Checks
 
 ```bash
-uv run python manage.py test directory   # 13 tests
+uv run python manage.py test directory   # 28 tests
 uv run ruff check . && uv run ruff format .
 uv run python manage.py check --deploy   # run with DEBUG=false
 ```
@@ -77,12 +77,34 @@ annual accuracy sweep is a morning's work.
 **The flat-page route is last in [src/directory/urls.py](src/directory/urls.py)**
 because `<slug:slug>/` would otherwise swallow every route above it.
 
+## The two public forms
+
+Providers **register** their own programs at `/register/`, and that form
+collects every field `Program` publishes — description, schedule, cost, grades
+and ages, address, logo, and a contact person. **Approving it is the only action
+left**; `build_program_from()` in [src/directory/admin.py](src/directory/admin.py)
+copies the record across field for field, and the tests in `ApprovalTests`
+assert that nothing a registrant typed gets dropped. If you add a field to
+`Program`, add it there too, or it becomes something she retypes by hand.
+
+Anyone else can **suggest** a program they do not run at `/suggest/`. That form
+is deliberately thin, because it is a lead rather than a listing: enough to
+reach whoever runs it and invite them to register it properly.
+
+Both land in one Submissions queue with a Kind column, so there is only ever one
+inbox to check. Approving publishes immediately — except for a record with no
+one-line description, which becomes a draft instead, because a listing has
+nothing to show without one.
+
+Neither form gets a rich text editor. Plain text becomes paragraphs on approval,
+which keeps typography consistent and the sanitization surface narrow.
+
 ## Where this is in the plan
 
 Phases 1 and 3 are done, along with most of Phase 4 — models, migrations, a
 styled admin, the public list and detail pages, search, category filtering,
-flat pages, the submission form with its moderation queue, sitemap, robots, and
-Open Graph tags.
+flat pages, provider registration and referral with a shared moderation queue,
+sitemap, robots, and Open Graph tags.
 
 Phase 2 (the Hetzner server, Caddy, Gunicorn, Litestream, and `provision.sh`) is
 next and has not been started. Phase 0, the twenty-program content inventory,

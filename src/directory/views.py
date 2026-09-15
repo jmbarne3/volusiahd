@@ -1,8 +1,7 @@
-from django.contrib import messages
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 
-from .forms import SubmissionForm
+from .forms import ProgramReferralForm, ProgramRegistrationForm
 from .models import Category, Page, Program
 
 
@@ -82,20 +81,33 @@ def page_detail(request, slug):
     return render(request, "directory/page.html", {"page": page})
 
 
-def submit_program(request):
+def register_program(request):
+    """The provider's own door. Everything `Program` publishes is collected here."""
     if request.method == "POST":
-        form = SubmissionForm(request.POST)
+        form = ProgramRegistrationForm(request.POST, request.FILES)
         if form.is_valid():
             form.save()
-            messages.success(
-                request,
-                "Thank you — we have your suggestion and will review it before it appears.",
-            )
-            return redirect("directory:submit_thanks")
+            return redirect("directory:register_thanks")
     else:
-        form = SubmissionForm()
-    return render(request, "directory/submit.html", {"form": form})
+        form = ProgramRegistrationForm()
+    return render(request, "directory/register.html", {"form": form})
 
 
-def submit_thanks(request):
-    return render(request, "directory/submit_thanks.html")
+def register_thanks(request):
+    return render(request, "directory/register_thanks.html")
+
+
+def refer_program(request):
+    """The neighbour's door. A lead, so we can invite them to register."""
+    if request.method == "POST":
+        form = ProgramReferralForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect("directory:refer_thanks")
+    else:
+        form = ProgramReferralForm()
+    return render(request, "directory/refer.html", {"form": form})
+
+
+def refer_thanks(request):
+    return render(request, "directory/refer_thanks.html")

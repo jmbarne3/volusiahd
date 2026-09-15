@@ -39,7 +39,12 @@ class StaticSitemap(Sitemap):
     priority = 1.0
 
     def items(self):
-        return ["directory:home", "directory:program_list", "directory:submit"]
+        return [
+            "directory:home",
+            "directory:program_list",
+            "directory:register",
+            "directory:refer",
+        ]
 
     def location(self, item):
         return reverse(item)

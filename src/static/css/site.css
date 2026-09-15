@@ -88,3 +88,33 @@ h3 { font-size: 1.1rem; margin: 0 0 .35rem; }
 .empty { color: var(--muted); }
 
 .site-footer { border-top: 1px solid var(--line); padding-block: 2rem; color: var(--muted); font-size: .9rem; }
+
+/* --- Public forms -------------------------------------------------------- */
+/* The registration form is long by design: the provider filling it in is the
+   reason an administrator never has to retype anything. Grouping and breathing
+   room are what keep it from feeling like a tax form. */
+
+.form-long { max-width: 40rem; }
+.form-long fieldset { border: 0; border-top: 1px solid var(--line); padding: 1.5rem 0 0; margin: 2.5rem 0 0; }
+.form-long legend { font-weight: 700; font-size: 1.1rem; padding: 0; }
+.hint { color: var(--muted); font-size: .9rem; margin: .25rem 0 1.25rem; }
+
+.field { margin: 0 0 1.25rem; max-width: 34rem; }
+.field label, .field .group-label { display: block; font-weight: 600; margin-bottom: .25rem; }
+.field input[type=text], .field input[type=email], .field input[type=url],
+.field input[type=tel], .field input[type=number], .field input[type=file], .field textarea {
+  width: 100%; padding: .6rem .75rem; border: 1px solid var(--line); border-radius: .375rem; font: inherit;
+}
+.field textarea { resize: vertical; }
+.field .helptext { display: block; font-size: .875rem; color: var(--muted); margin-top: .35rem; }
+.field ul { list-style: none; padding: 0; margin: .25rem 0 0; display: grid; gap: .3rem; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); }
+.field ul label { font-weight: 400; display: inline; }
+.field-check label { display: inline; font-weight: 400; }
+.field .req { color: #b91c1c; }
+
+.has-error input, .has-error textarea { border-color: #dc2626; }
+.field-error { color: #b91c1c; font-size: .9rem; margin: 0 0 .35rem; }
+
+.callout { background: var(--soft); border-radius: .5rem; padding: 1.5rem; margin-top: 3rem; }
+.callout h2 { margin-top: 0; }
+.callout .cta { display: inline-block; text-decoration: none; }

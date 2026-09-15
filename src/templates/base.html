@@ -28,7 +28,7 @@ these tags matter more than they usually would.{% endcomment %}
     <nav>
       <a href="{% url 'directory:program_list' %}">Programs</a>
       {% for page in nav_pages %}<a href="{{ page.get_absolute_url }}">{{ page.title }}</a>{% endfor %}
-      <a class="cta" href="{% url 'directory:submit' %}">Suggest a program</a>
+      <a class="cta" href="{% url 'directory:register' %}">Register a program</a>
     </nav>
   </div>
 </header>
@@ -43,7 +43,7 @@ these tags matter more than they usually would.{% endcomment %}
 <footer class="site-footer">
   <div class="wrap">
     <p>{{ site_name }}. Programs are listed without regard to affiliation; please ask each program directly about its approach.</p>
-    <p><a href="{% url 'directory:submit' %}">Suggest a program</a></p>
+    <p><a href="{% url 'directory:register' %}">Register a program</a> &middot; <a href="{% url 'directory:refer' %}">Suggest one you do not run</a></p>
   </div>
 </footer>
 </body>

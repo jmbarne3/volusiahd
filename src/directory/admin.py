@@ -5,11 +5,15 @@ cleanup pass. The test of this file is that someone who has never seen the
 codebase can add a program without asking a question.
 """
 
+from pathlib import Path
+
 from django.contrib import admin, messages
 from django.contrib.auth.models import Group
+from django.core.files.base import ContentFile
 from django.db.models import Count
 from django.utils import timezone
 from django.utils.html import format_html
+from django.utils.text import slugify
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.decorators import action, display
 
@@ -160,88 +164,242 @@ class PageAdmin(ModelAdmin):
 
 @admin.register(Submission)
 class SubmissionAdmin(ModelAdmin):
-    list_display = ["program_name", "city", "status", "submitter_name", "created_at"]
-    list_filter = ["status", "categories"]
-    search_fields = ["program_name", "submitter_name", "submitter_email"]
-    readonly_fields = [
+    """One queue, two kinds.
+
+    A registration arrives complete, and "Approve" publishes it — that is the
+    whole point of the longer form. A referral is a lead about someone else's
+    program, so it gets a draft instead and someone reaches out.
+    """
+
+    list_display = [
         "program_name",
+        "kind_display",
+        "city",
+        "status",
+        "submitter_name",
+        "created_at",
+    ]
+    list_filter = ["kind", "status", "categories"]
+    search_fields = ["program_name", "submitter_name", "submitter_email", "city"]
+    date_hierarchy = "created_at"
+    actions = ["approve_and_publish", "create_draft_program", "mark_rejected"]
+
+    # Everything the public typed is a record of what they said, not something
+    # we edit. Corrections happen on the Program after approval.
+    readonly_fields = [
+        "kind",
+        "program_name",
+        "short_description",
+        "description",
         "website",
         "email",
         "phone",
+        "street",
         "city",
-        "description",
+        "zip_code",
+        "serves_grades",
+        "age_min",
+        "age_max",
+        "cost_notes",
+        "meeting_schedule",
+        "logo_preview",
+        "contact_name",
+        "contact_role",
+        "contact_email",
+        "contact_phone",
+        "contact_is_public",
         "submitter_name",
         "submitter_email",
+        "submitter_role",
+        "is_authorized",
         "created_at",
         "created_program",
     ]
-    actions = ["approve_into_programs"]
 
     fieldsets = [
         (
-            "What was submitted",
+            "The program",
             {
                 "fields": [
+                    "kind",
                     "program_name",
-                    "website",
-                    "email",
-                    "phone",
-                    "city",
-                    "categories",
+                    "short_description",
                     "description",
+                    "categories",
+                    "logo_preview",
                 ]
             },
         ),
-        ("Who submitted it", {"fields": ["submitter_name", "submitter_email", "created_at"]}),
+        (
+            "How to reach them",
+            {"fields": ["website", "email", "phone", "street", "city", "zip_code"]},
+        ),
+        (
+            "Who it serves and when",
+            {
+                "fields": [
+                    "serves_grades",
+                    ("age_min", "age_max"),
+                    "meeting_schedule",
+                    "cost_notes",
+                ]
+            },
+        ),
+        (
+            "Contact to publish",
+            {
+                "fields": [
+                    "contact_name",
+                    "contact_role",
+                    "contact_email",
+                    "contact_phone",
+                    "contact_is_public",
+                ],
+                "classes": ["collapse"],
+            },
+        ),
+        (
+            "Who sent it",
+            {
+                "fields": [
+                    "submitter_name",
+                    "submitter_email",
+                    "submitter_role",
+                    "is_authorized",
+                    "created_at",
+                ]
+            },
+        ),
         ("Review", {"fields": ["status", "review_notes", "created_program"]}),
     ]
 
     def has_add_permission(self, request):
-        # Submissions arrive from the public form, never typed in here.
+        # Submissions arrive from the public forms, never typed in here.
         return False
 
-    @action(description="Approve — create a draft program from this")
-    def approve_into_programs(self, request, queryset):
-        created = 0
-        skipped = 0
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("created_program")
+
+    @display(description="Kind", ordering="kind", label=True)
+    def kind_display(self, obj):
+        return obj.get_kind_display().split(" — ")[0]
+
+    @display(description="Logo")
+    def logo_preview(self, obj):
+        if not obj.logo:
+            return "—"
+        return format_html('<img src="{}" style="max-height:120px">', obj.logo.url)
+
+    @action(description="Approve — publish the program")
+    def approve_and_publish(self, request, queryset):
+        self._approve(request, queryset, Program.Status.PUBLISHED)
+
+    @action(description="Approve as a draft — do not publish yet")
+    def create_draft_program(self, request, queryset):
+        self._approve(request, queryset, Program.Status.DRAFT)
+
+    @action(description="Reject")
+    def mark_rejected(self, request, queryset):
+        updated = queryset.update(status=Submission.Status.REJECTED)
+        self.message_user(request, f"Rejected {updated}.", messages.SUCCESS)
+
+    def _approve(self, request, queryset, status):
+        created, skipped, incomplete = 0, 0, []
+
         for submission in queryset:
             if submission.created_program_id:
                 skipped += 1
                 continue
-            program = Program.objects.create(
-                name=submission.program_name,
-                slug=_unique_slug(submission.program_name),
-                short_description=submission.description[:240],
-                website=submission.website,
-                email=submission.email,
-                phone=submission.phone,
-                city=submission.city,
-                status=Program.Status.DRAFT,
-            )
-            program.categories.set(submission.categories.all())
+
+            # Nothing to show in a listing means nothing worth publishing.
+            target_status = status
+            if status == Program.Status.PUBLISHED and not submission.is_complete_enough_to_publish:
+                target_status = Program.Status.DRAFT
+                incomplete.append(submission.program_name)
+
+            program = build_program_from(submission, target_status)
             submission.created_program = program
             submission.status = Submission.Status.APPROVED
             submission.save(update_fields=["created_program", "status"])
             created += 1
 
         if created:
+            word = "program" if created == 1 else "programs"
+            where = "published" if status == Program.Status.PUBLISHED else "created as drafts"
+            self.message_user(request, f"{created} {word} {where}.", messages.SUCCESS)
+        if incomplete:
             self.message_user(
                 request,
-                f"Created {created} draft program{'s' if created != 1 else ''}. "
-                "Open each one, check the details, then set it to Published.",
-                messages.SUCCESS,
-            )
-        if skipped:
-            self.message_user(
-                request,
-                f"Skipped {skipped} submission{'s' if skipped != 1 else ''} already approved.",
+                "Left as drafts because they have no one-line description, which is "
+                f"what a listing shows: {', '.join(incomplete)}.",
                 messages.WARNING,
             )
+        if skipped:
+            word = "submission" if skipped == 1 else "submissions"
+            self.message_user(
+                request, f"Skipped {skipped} already-approved {word}.", messages.WARNING
+            )
+
+
+def build_program_from(submission, status):
+    """Copy a submission into a real Program, field for field.
+
+    This is the function that has to stay honest: anything a registrant fills
+    in and this does not carry across becomes something she retypes by hand.
+    """
+    program = Program(
+        name=submission.program_name,
+        slug=_unique_slug(submission.program_name),
+        short_description=(
+            submission.short_description or submission.description[:240] or submission.program_name
+        ),
+        description=submission.description_as_html(),
+        website=submission.website,
+        email=submission.email,
+        phone=submission.phone,
+        street=submission.street,
+        city=submission.city,
+        zip_code=submission.zip_code,
+        serves_grades=submission.serves_grades,
+        age_min=submission.age_min,
+        age_max=submission.age_max,
+        cost_notes=submission.cost_notes,
+        meeting_schedule=submission.meeting_schedule,
+        status=status,
+        # The provider described it today, so today is when it was last verified.
+        last_verified_on=timezone.localdate(),
+    )
+
+    if submission.logo:
+        # Copy the bytes rather than sharing a path, so the submission record
+        # and the published program have independent file lifetimes.
+        submission.logo.open("rb")
+        try:
+            program.logo.save(
+                Path(submission.logo.name).name,
+                ContentFile(submission.logo.read()),
+                save=False,
+            )
+        finally:
+            submission.logo.close()
+
+    program.save()
+    program.categories.set(submission.categories.all())
+
+    if submission.contact_name:
+        ContactPerson.objects.create(
+            program=program,
+            name=submission.contact_name,
+            role=submission.contact_role,
+            email=submission.contact_email,
+            phone=submission.contact_phone,
+            is_public=submission.contact_is_public,
+        )
+
+    return program
 
 
 def _unique_slug(name):
-    from django.utils.text import slugify
-
     base = slugify(name)[:150] or "program"
     slug = base
     n = 2

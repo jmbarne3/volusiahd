@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block title %}Registration received — {{ site_name }}{% endblock %}
+
+{% block content %}
+<h1>Thank you — we have your registration</h1>
+<p class="lede">Someone reads every registration before it goes live, so give us a few days. If anything is unclear we will email you at the address you gave.</p>
+<p>In the meantime, <a href="{% url 'directory:program_list' %}">have a look at what is already listed</a>.</p>
+{% endblock %}

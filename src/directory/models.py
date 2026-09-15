@@ -8,9 +8,13 @@ Note the absence of any faith-based or secular flag. This is deliberate and
 settled — programs describe their own affiliation in their own description.
 """
 
+import re
+
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.html import escape
 from django_prose_editor.fields import ProseEditorField
 
 # A deliberately narrow toolbar. A full word-processor toolbar invites
@@ -239,31 +243,102 @@ class Page(SanitizedRichTextMixin, models.Model):
         return reverse("directory:page", kwargs={"slug": self.slug})
 
 
-class Submission(models.Model):
-    """A public "suggest a program" record, approved into a Program in one action.
+def validate_logo_size(value):
+    """Public uploads need a ceiling. 2 MB is generous for a logo."""
+    limit = 2 * 1024 * 1024
+    if value.size > limit:
+        raise ValidationError("That image is larger than 2 MB. Please upload a smaller file.")
 
-    This is the feature that determines whether the directory grows without the
-    content manager doing all of the typing.
+
+class Submission(models.Model):
+    """A record waiting on approval, from one of two doors.
+
+    A **registration** is a provider describing their own program. It mirrors
+    every field on `Program`, because the whole point is that approving it is
+    the only action left — nobody retypes anything.
+
+    A **referral** is someone pointing us at a program they do not run. It is
+    deliberately thin: a name and a way to reach them, so we can invite the
+    people who run it to register it properly themselves.
+
+    Both land in one queue. She should not have to remember to check two.
     """
+
+    class Kind(models.TextChoices):
+        REGISTRATION = "registration", "Registration — the provider's own program"
+        REFERRAL = "referral", "Referral — someone else suggested it"
 
     class Status(models.TextChoices):
         NEW = "new", "New — needs review"
         APPROVED = "approved", "Approved"
         REJECTED = "rejected", "Rejected"
 
+    kind = models.CharField(
+        max_length=16,
+        choices=Kind.choices,
+        default=Kind.REGISTRATION,
+        db_index=True,
+    )
+
+    # --- The program itself. These mirror `Program` field for field. --------
+
     program_name = models.CharField(max_length=160)
+    short_description = models.CharField(
+        max_length=240,
+        blank=True,
+        help_text="One sentence, plain text. Shown in listings and search results.",
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="The full description, as plain text. Blank lines start new paragraphs.",
+    )
+    categories = models.ManyToManyField(Category, blank=True)
+
     website = models.URLField(blank=True)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=32, blank=True)
+
+    street = models.CharField(max_length=160, blank=True)
     city = models.CharField(max_length=80, blank=True)
-    categories = models.ManyToManyField(Category, blank=True)
-    description = models.TextField(
+    zip_code = models.CharField("ZIP code", max_length=10, blank=True)
+
+    serves_grades = models.CharField(max_length=80, blank=True)
+    age_min = models.PositiveSmallIntegerField(null=True, blank=True)
+    age_max = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    cost_notes = models.TextField(blank=True)
+    meeting_schedule = models.TextField(blank=True)
+
+    logo = models.ImageField(
+        upload_to="submissions/logos/",
         blank=True,
-        help_text="What the submitter told us about the program.",
+        validators=[validate_logo_size],
     )
+
+    # --- The contact to publish alongside the program ----------------------
+
+    contact_name = models.CharField(max_length=120, blank=True)
+    contact_role = models.CharField(max_length=80, blank=True)
+    contact_email = models.EmailField(blank=True)
+    contact_phone = models.CharField(max_length=32, blank=True)
+    contact_is_public = models.BooleanField(
+        default=True,
+        help_text="Whether this contact's details may appear on the public page.",
+    )
+
+    # --- Who sent it, and our handling of it -------------------------------
 
     submitter_name = models.CharField(max_length=120, blank=True)
     submitter_email = models.EmailField(blank=True)
+    submitter_role = models.CharField(
+        max_length=80,
+        blank=True,
+        help_text="Their role at the program, for registrations.",
+    )
+    is_authorized = models.BooleanField(
+        default=False,
+        help_text="The registrant confirmed they are authorized to list this program.",
+    )
 
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.NEW)
     review_notes = models.TextField(blank=True, help_text="For our records. Never shown publicly.")
@@ -281,3 +356,22 @@ class Submission(models.Model):
 
     def __str__(self):
         return self.program_name
+
+    @property
+    def is_registration(self):
+        return self.kind == self.Kind.REGISTRATION
+
+    @property
+    def is_complete_enough_to_publish(self):
+        """A record with no one-line description has nothing to show in a listing."""
+        return bool(self.short_description.strip())
+
+    def description_as_html(self):
+        """Plain text in, paragraphs out.
+
+        The public forms take plain text rather than handing strangers a rich
+        text editor. `Program.description` is sanitized again on save, so this
+        only has to produce the paragraphs.
+        """
+        blocks = [escape(block.strip()) for block in re.split(r"\n\s*\n", self.description or "")]
+        return "".join(f"<p>{block}</p>" for block in blocks if block)

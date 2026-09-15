@@ -6,9 +6,16 @@ reaching a template that renders with `|safe`, and a draft program being
 visible on the public site.
 """
 
+import os
+import shutil
+import tempfile
+from io import BytesIO
+
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
 from django.urls import reverse
+from PIL import Image
 
 from .models import Category, ContactPerson, Page, Program, Submission
 
@@ -44,7 +51,7 @@ class PublicSiteTests(TestCase):
             reverse("directory:program", kwargs={"slug": self.program.slug}),
             reverse("directory:category", kwargs={"slug": self.category.slug}),
             reverse("directory:page", kwargs={"slug": self.page.slug}),
-            reverse("directory:submit"),
+            reverse("directory:register"),
             reverse("directory:robots"),
             "/sitemap.xml",
         ]:
@@ -105,33 +112,302 @@ class SanitizationTests(TestCase):
         self.assertNotIn("<script>", page.body)
 
 
-class SubmissionTests(TestCase):
+def make_test_image(name="logo.png"):
+    """A one-pixel PNG, small enough to keep the suite fast."""
+    buffer = BytesIO()
+    Image.new("RGB", (1, 1), "white").save(buffer, format="PNG")
+    return SimpleUploadedFile(name, buffer.getvalue(), content_type="image/png")
+
+
+def make_oversized_image(name="huge.png"):
+    """A real PNG over 2 MB. Random noise, because it will not compress."""
+    side = 1100
+    image = Image.frombytes("RGB", (side, side), os.urandom(side * side * 3))
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    return SimpleUploadedFile(name, buffer.getvalue(), content_type="image/png")
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp(prefix="hsd-test-media-"))
+class RegistrationTests(TestCase):
+    """The registration form's job is to arrive complete enough to publish."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.category = Category.objects.create(name="Co-ops", slug="co-ops")
+
     def _payload(self, **overrides):
         return {
-            "program_name": "New Group",
-            "website": "https://example.com",
-            "email": "group@example.com",
-            "phone": "",
+            "program_name": "Coastal Co-op",
+            "short_description": "A Thursday co-op for K–8 families in Ormond Beach.",
+            "description": "We meet weekly.\n\nClasses run September through May.",
+            "categories": [str(self.category.pk)],
+            "website": "https://coastal.example.org",
+            "email": "hello@coastal.example.org",
+            "phone": "386-555-0100",
+            "street": "12 Ocean Ave",
             "city": "Ormond Beach",
-            "description": "A new group that meets on Thursdays.",
+            "zip_code": "32176",
+            "serves_grades": "K–8",
+            "age_min": "5",
+            "age_max": "14",
+            "cost_notes": "$45 per semester.",
+            "meeting_schedule": "Thursdays 9am–noon.",
+            "contact_name": "Dana Reed",
+            "contact_role": "Coordinator",
+            "contact_email": "dana@coastal.example.org",
+            "contact_phone": "386-555-0101",
+            "contact_is_public": "on",
+            "submitter_name": "Dana Reed",
+            "submitter_email": "dana@coastal.example.org",
+            "submitter_role": "Director",
+            "is_authorized": "on",
+            "website_url": "",
+            **overrides,
+        }
+
+    def test_a_registration_is_stored_as_a_registration(self):
+        response = self.client.post(reverse("directory:register"), self._payload())
+        self.assertRedirects(response, reverse("directory:register_thanks"))
+
+        submission = Submission.objects.get()
+        self.assertEqual(submission.kind, Submission.Kind.REGISTRATION)
+        self.assertEqual(submission.status, Submission.Status.NEW)
+        self.assertEqual(submission.serves_grades, "K–8")
+        self.assertEqual(submission.contact_name, "Dana Reed")
+        self.assertTrue(submission.is_authorized)
+
+    def test_authorization_is_required(self):
+        response = self.client.post(reverse("directory:register"), self._payload(is_authorized=""))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Submission.objects.count(), 0)
+
+    def test_at_least_one_way_to_make_contact_is_required(self):
+        response = self.client.post(
+            reverse("directory:register"),
+            self._payload(website="", email="", phone="", contact_email=""),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "at least one way for families to reach you")
+        self.assertEqual(Submission.objects.count(), 0)
+
+    def test_age_range_must_make_sense(self):
+        response = self.client.post(
+            reverse("directory:register"), self._payload(age_min="14", age_max="5")
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Submission.objects.count(), 0)
+
+    def test_honeypot_rejects_bots(self):
+        response = self.client.post(
+            reverse("directory:register"), self._payload(website_url="http://spam.example")
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Submission.objects.count(), 0)
+
+    def test_a_logo_can_be_uploaded(self):
+        response = self.client.post(
+            reverse("directory:register"), self._payload(logo=make_test_image())
+        )
+        self.assertRedirects(response, reverse("directory:register_thanks"))
+        self.assertTrue(Submission.objects.get().logo)
+
+    def test_an_oversized_logo_is_refused(self):
+        """A genuine image over the ceiling, not a corrupt file — otherwise
+        Pillow rejects it first and the size limit never gets exercised."""
+        response = self.client.post(
+            reverse("directory:register"), self._payload(logo=make_oversized_image())
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "larger than 2 MB")
+        self.assertEqual(Submission.objects.count(), 0)
+
+
+class ReferralTests(TestCase):
+    def _payload(self, **overrides):
+        return {
+            "program_name": "Surf Lessons",
+            "website": "https://surf.example.org",
+            "email": "",
+            "phone": "",
+            "city": "New Smyrna Beach",
+            "description": "I think they take homeschoolers on Wednesdays.",
             "submitter_name": "Jane",
             "submitter_email": "jane@example.com",
             "website_url": "",
             **overrides,
         }
 
-    def test_a_real_submission_is_stored(self):
-        response = self.client.post(reverse("directory:submit"), self._payload())
-        self.assertRedirects(response, reverse("directory:submit_thanks"))
-        self.assertEqual(Submission.objects.count(), 1)
-        self.assertEqual(Submission.objects.get().status, Submission.Status.NEW)
+    def test_a_referral_is_stored_as_a_referral(self):
+        response = self.client.post(reverse("directory:refer"), self._payload())
+        self.assertRedirects(response, reverse("directory:refer_thanks"))
+        submission = Submission.objects.get()
+        self.assertEqual(submission.kind, Submission.Kind.REFERRAL)
 
     def test_honeypot_rejects_bots(self):
-        response = self.client.post(
-            reverse("directory:submit"), self._payload(website_url="http://spam.example")
-        )
-        self.assertEqual(response.status_code, 200)
+        self.client.post(reverse("directory:refer"), self._payload(website_url="http://spam"))
         self.assertEqual(Submission.objects.count(), 0)
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp(prefix="hsd-test-media-"))
+class ApprovalTests(TestCase):
+    """The promise of the registration form is that approving it is the only
+    action left. These assert that nothing a registrant typed gets dropped."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_superuser("editor", "e@example.org", "pw-for-tests-only")
+        cls.category = Category.objects.create(name="Co-ops", slug="co-ops")
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def _registration(self, **overrides):
+        fields = {
+            "kind": Submission.Kind.REGISTRATION,
+            "program_name": "Coastal Co-op",
+            "short_description": "A Thursday co-op for K–8 families.",
+            "description": "We meet weekly.\n\nClasses run September through May.",
+            "website": "https://coastal.example.org",
+            "email": "hello@coastal.example.org",
+            "phone": "386-555-0100",
+            "street": "12 Ocean Ave",
+            "city": "Ormond Beach",
+            "zip_code": "32176",
+            "serves_grades": "K–8",
+            "age_min": 5,
+            "age_max": 14,
+            "cost_notes": "$45 per semester.",
+            "meeting_schedule": "Thursdays 9am–noon.",
+            "contact_name": "Dana Reed",
+            "contact_role": "Coordinator",
+            "contact_email": "dana@coastal.example.org",
+            "contact_is_public": True,
+            "submitter_name": "Dana Reed",
+            "submitter_email": "dana@coastal.example.org",
+            "is_authorized": True,
+            **overrides,
+        }
+        submission = Submission.objects.create(**fields)
+        submission.categories.add(self.category)
+        return submission
+
+    def _run(self, action, submission):
+        return self.client.post(
+            "/admin/directory/submission/",
+            {"action": action, "_selected_action": [str(submission.pk)]},
+            follow=True,
+        )
+
+    def test_approving_a_registration_publishes_a_complete_program(self):
+        submission = self._registration()
+        self.assertEqual(self._run("approve_and_publish", submission).status_code, 200)
+
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, Submission.Status.APPROVED)
+        program = submission.created_program
+        self.assertIsNotNone(program)
+
+        # Published immediately: this is the whole point of the longer form.
+        self.assertEqual(program.status, Program.Status.PUBLISHED)
+
+        # Every field the registrant filled in came across.
+        self.assertEqual(program.name, "Coastal Co-op")
+        self.assertEqual(program.short_description, "A Thursday co-op for K–8 families.")
+        self.assertEqual(program.website, "https://coastal.example.org")
+        self.assertEqual(program.email, "hello@coastal.example.org")
+        self.assertEqual(program.phone, "386-555-0100")
+        self.assertEqual(program.street, "12 Ocean Ave")
+        self.assertEqual(program.city, "Ormond Beach")
+        self.assertEqual(program.zip_code, "32176")
+        self.assertEqual(program.serves_grades, "K–8")
+        self.assertEqual(program.age_min, 5)
+        self.assertEqual(program.age_max, 14)
+        self.assertEqual(program.cost_notes, "$45 per semester.")
+        self.assertEqual(program.meeting_schedule, "Thursdays 9am–noon.")
+        self.assertIn(self.category, program.categories.all())
+        self.assertIsNotNone(program.last_verified_on)
+
+        # Plain text became paragraphs.
+        self.assertIn("<p>We meet weekly.</p>", program.description)
+        self.assertIn("September through May", program.description)
+
+        # The contact became a real inline record.
+        contact = program.contacts.get()
+        self.assertEqual(contact.name, "Dana Reed")
+        self.assertEqual(contact.role, "Coordinator")
+        self.assertTrue(contact.is_public)
+
+    def test_an_approved_registration_is_immediately_visible_to_the_public(self):
+        submission = self._registration()
+        self._run("approve_and_publish", submission)
+        submission.refresh_from_db()
+
+        self.client.logout()
+        response = self.client.get(submission.created_program.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Coastal Co-op")
+
+    def test_description_html_is_escaped_not_injected(self):
+        submission = self._registration(description="<script>alert(1)</script>\n\nSecond.")
+        self._run("approve_and_publish", submission)
+        submission.refresh_from_db()
+        self.assertNotIn("<script>", submission.created_program.description)
+
+    def test_approve_as_draft_does_not_publish(self):
+        submission = self._registration()
+        self._run("create_draft_program", submission)
+        submission.refresh_from_db()
+        self.assertEqual(submission.created_program.status, Program.Status.DRAFT)
+
+    def test_a_thin_referral_is_held_back_from_publishing(self):
+        """A referral has no one-line description, and a listing shows nothing
+        without one. Approving it makes a draft and says why."""
+        submission = Submission.objects.create(
+            kind=Submission.Kind.REFERRAL,
+            program_name="Surf Lessons",
+            description="They might take homeschoolers.",
+        )
+        response = self._run("approve_and_publish", submission)
+        submission.refresh_from_db()
+        self.assertEqual(submission.created_program.status, Program.Status.DRAFT)
+        self.assertContains(response, "no one-line description")
+
+    def test_approving_twice_does_not_duplicate(self):
+        submission = self._registration(program_name="Once Only")
+        for _ in range(2):
+            self._run("approve_and_publish", submission)
+        self.assertEqual(Program.objects.filter(name="Once Only").count(), 1)
+
+    def test_slugs_do_not_collide(self):
+        first = self._registration()
+        second = self._registration()
+        self._run("approve_and_publish", first)
+        self._run("approve_and_publish", second)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertNotEqual(first.created_program.slug, second.created_program.slug)
+
+    def test_the_logo_is_copied_not_shared(self):
+        """The program's file has to outlive any tidying up of submissions,
+        so approval copies the bytes rather than pointing at the same path."""
+        submission = self._registration(logo=make_test_image())
+        self._run("approve_and_publish", submission)
+        submission.refresh_from_db()
+
+        program = submission.created_program
+        self.assertTrue(program.logo)
+        self.assertNotEqual(program.logo.name, submission.logo.name)
+        with program.logo.open("rb") as handle:
+            self.assertTrue(handle.read().startswith(b"\x89PNG"))
+
+    def test_rejecting_creates_nothing(self):
+        submission = self._registration()
+        self._run("mark_rejected", submission)
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, Submission.Status.REJECTED)
+        self.assertIsNone(submission.created_program)
+        self.assertEqual(Program.objects.count(), 0)
 
 
 class AdminTests(TestCase):
@@ -144,6 +420,7 @@ class AdminTests(TestCase):
         self.client.force_login(self.user)
 
     def test_admin_screens_render(self):
+        submission = Submission.objects.create(program_name="A Program")
         for url in [
             "/admin/",
             "/admin/directory/program/",
@@ -151,6 +428,7 @@ class AdminTests(TestCase):
             "/admin/directory/category/",
             "/admin/directory/page/",
             "/admin/directory/submission/",
+            f"/admin/directory/submission/{submission.pk}/change/",
         ]:
             with self.subTest(url=url):
                 self.assertEqual(self.client.get(url).status_code, 200)
@@ -158,42 +436,8 @@ class AdminTests(TestCase):
     def test_groups_are_hidden(self):
         self.assertEqual(self.client.get("/admin/auth/group/").status_code, 404)
 
-    def test_approving_a_submission_creates_a_draft_program(self):
-        submission = Submission.objects.create(
-            program_name="Suggested Co-op", description="They meet on Fridays."
-        )
-        submission.categories.add(self.category)
-
-        response = self.client.post(
-            "/admin/directory/submission/",
-            {
-                "action": "approve_into_programs",
-                "_selected_action": [str(submission.pk)],
-            },
-            follow=True,
-        )
-        self.assertEqual(response.status_code, 200)
-
-        submission.refresh_from_db()
-        self.assertEqual(submission.status, Submission.Status.APPROVED)
-        self.assertIsNotNone(submission.created_program)
-
-        program = submission.created_program
-        self.assertEqual(program.name, "Suggested Co-op")
-        self.assertEqual(program.slug, "suggested-co-op")
-        # Approved, but not yet public: she still checks it before publishing.
-        self.assertEqual(program.status, Program.Status.DRAFT)
-        self.assertIn(self.category, program.categories.all())
-
-    def test_approving_twice_does_not_duplicate(self):
-        submission = Submission.objects.create(program_name="Once Only")
-        for _ in range(2):
-            self.client.post(
-                "/admin/directory/submission/",
-                {"action": "approve_into_programs", "_selected_action": [str(submission.pk)]},
-                follow=True,
-            )
-        self.assertEqual(Program.objects.filter(name="Once Only").count(), 1)
+    def test_submissions_cannot_be_typed_in_by_hand(self):
+        self.assertEqual(self.client.get("/admin/directory/submission/add/").status_code, 403)
 
     def test_mark_verified_today_action(self):
         program = Program.objects.create(name="P", slug="p", short_description="s")
@@ -204,3 +448,11 @@ class AdminTests(TestCase):
         )
         program.refresh_from_db()
         self.assertIsNotNone(program.last_verified_on)
+
+
+def tearDownModule():
+    """Remove the temporary media trees the upload tests wrote into."""
+    for cls in [RegistrationTests, ApprovalTests]:
+        root = cls._overridden_settings.get("MEDIA_ROOT")
+        if root:
+            shutil.rmtree(root, ignore_errors=True)

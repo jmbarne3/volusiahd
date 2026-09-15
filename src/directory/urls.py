@@ -12,8 +12,10 @@ urlpatterns = [
     path("programs/", views.program_list, name="program_list"),
     path("programs/<slug:slug>/", views.program_detail, name="program"),
     path("categories/<slug:slug>/", views.category_detail, name="category"),
-    path("suggest/", views.submit_program, name="submit"),
-    path("suggest/thanks/", views.submit_thanks, name="submit_thanks"),
+    path("register/", views.register_program, name="register"),
+    path("register/thanks/", views.register_thanks, name="register_thanks"),
+    path("suggest/", views.refer_program, name="refer"),
+    path("suggest/thanks/", views.refer_thanks, name="refer_thanks"),
     path(
         "robots.txt",
         TemplateView.as_view(template_name="robots.txt", content_type="text/plain"),
