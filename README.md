@@ -4,9 +4,9 @@ A directory of homeschool co-ops, classes, sports, arts, testing, and support
 groups in Volusia County, Florida. Django 5.2 LTS on SQLite, built so that
 adding a program takes four minutes and nobody has to be asked to do it.
 
-The full development and hosting plan — stack rationale, phases, what to buy on
-Hetzner, backup and recovery — is in
-[docs/volusia-homeschool-directory-plan.md](docs/volusia-homeschool-directory-plan.md).
+The development plan and the hosting guides — stack rationale, phases, the Fly.io
+deploy step by step, backup and recovery — live in `docs/`, which is deliberately
+not in version control. Ask Jim for a copy.
 
 ## Running it locally
 
@@ -46,7 +46,6 @@ src/volusiahd/            project package: settings, urls, wsgi, unfold config
 src/directory/            the single app — models, admin, views, tests
 src/templates/            public templates; base.html carries the Open Graph tags
 src/static/css/site.css   hand-written, no build step
-docs/                     the development plan and hosting guides
 Dockerfile, fly.toml      the production image and its Fly.io configuration
 deploy/                   Litestream config and the container's start scripts
 ```
@@ -108,7 +107,8 @@ styled admin, the public list and detail pages, search, category filtering,
 flat pages, provider registration and referral with a shared moderation queue,
 sitemap, robots, and Open Graph tags.
 
-Phase 2 moved from a Hetzner server to Fly.io. The image, `fly.toml`, and
-Litestream setup are in the repository and build locally; the first real deploy
-is next, following `docs/hosting-setup.md`. Phase 0, the twenty-program content inventory,
-runs in parallel and is not a code task.
+Phase 2 moved from a Hetzner server to Fly.io, and the site is deployed: one
+machine in Ashburn, SQLite on a volume with Litestream streaming to Backblaze
+B2, and uploaded logos in object storage. Still open are the restore drill and
+`RUNBOOK.md`. Phase 0, the twenty-program content inventory, runs in parallel
+and is not a code task.
