@@ -1,31 +1,99 @@
-/* Deliberately small and hand-written. No build step, no framework: this file
-   should still be editable in 2031 by whoever inherits it. */
+/* Hand-written, no framework, no build step: this file should still be
+   editable in 2031 by whoever inherits it.
+
+   The organising idea is depth rather than decoration. Surfaces are
+   translucent and sit above a soft colour wash, so a card reads as a pane of
+   glass over the page rather than as a box drawn on it. That is the whole
+   trick, and it is three properties — a translucent background, a backdrop
+   blur, and a light top edge — applied consistently.
+
+   Everything below is driven by the tokens in :root. Change a token, not a
+   rule. Both the dark theme and the reduced-transparency fallback work by
+   redefining tokens and touching almost nothing else, which is the test of
+   whether the token layer is carrying its weight. */
 
 :root {
-  /* Palette. Warm, domestic, low-glare — a living room rather than an office.
-     Each colour has one job; do not invent new hex values further down. */
-  --cream: #f4f1ea;        /* page background */
-  --linen: #fcfaf5;        /* lifted surfaces: cards, header, inputs */
-  --sage: #7c9082;         /* calm accent: rules, tags, quiet panels */
-  --sage-deep: #52645a;    /* sage dark enough to carry light text */
-  --wall-sage: #e7ece4;    /* the second wall colour, at wall strength */
-  --sage-tint: #e4eae3;    /* sage at panel strength */
-  --honey: #c89d5a;        /* warm wood: accent rules and footer links */
-  --honey-tint: #f2e7d4;
-  --rust: #c86d51;         /* earthy pop: decorative only, too light for text */
-  --rust-deep: #9e4a31;    /* the same colour at text and button contrast */
-  --rust-darker: #8a3f29;  /* button hover */
-  --navy: #2e3e50;         /* body text, labels, footer ground */
+  /* `color-scheme: light dark` means: follow the operating system. That is
+     the default, and the toggle in the footer overrides it by putting
+     data-theme on <html> — which is the only thing it changes. Every colour
+     below is stated once, as a light-dark() pair, and switches with it.
 
-  --ink: var(--navy);
-  --muted: #5a6472;        /* 5.3:1 on cream — safe for help text */
-  --line: #e2dccd;
-  --line-strong: #d3cab4;
-  --bg: var(--cream);
-  --surface: var(--linen);
-  --accent: var(--rust-deep);
+     Each pair is preceded by its light value alone. That line is the
+     fallback for a browser without light-dark() (Safari below 17.5), which
+     drops the declaration it cannot parse and keeps the one before it.
+     Without it those browsers get no colours at all rather than a light
+     page. Delete the singles once that stops mattering. */
+  color-scheme: light dark;
 
-  /* One spacing scale. Every margin below is drawn from it. */
+  /* Neutrals carry a faint blue cast (hue 255) at very low chroma. A truly
+     grey grey reads as dirty next to translucent white; a hint of blue reads
+     as glass. Nothing here is pure black or pure white. */
+  --ink:        oklch(24% .014 255);
+  --ink:        light-dark(oklch(24% .014 255), oklch(93% .008 255));
+  --ink-strong: oklch(17% .016 255);
+  --ink-strong: light-dark(oklch(17% .016 255), oklch(98% .004 255));
+  --muted:      oklch(50% .012 255);   /* 6.4:1 on the page, either theme */
+  --muted:      light-dark(oklch(50% .012 255), oklch(72% .014 255));
+  --bg:         oklch(97.5% .004 255);
+  --bg:         light-dark(oklch(97.5% .004 255), oklch(17.5% .014 255));
+
+  /* The wash. Glass over a flat colour looks like nothing at all, because
+     there is nothing behind it to refract. These three very low chroma
+     blooms are what the blur has to work with. */
+  --wash-1: oklch(86% .062 258 / .7);
+  --wash-1: light-dark(oklch(86% .062 258 / .7), oklch(45% .07 258 / .5));
+  --wash-2: oklch(89% .052 195 / .6);
+  --wash-2: light-dark(oklch(89% .052 195 / .6), oklch(42% .06 195 / .45));
+  --wash-3: oklch(89% .048 310 / .5);
+  --wash-3: light-dark(oklch(89% .048 310 / .5), oklch(40% .06 310 / .38));
+
+  /* One accent, muted. Interactive things are this colour and nothing else
+     is, so the page has exactly one thing competing for a click. */
+  --accent:       oklch(52% .105 258);
+  --accent:       light-dark(oklch(52% .105 258), oklch(76% .1 258));
+  --accent-hover: oklch(45% .105 258);
+  --accent-hover: light-dark(oklch(45% .105 258), oklch(84% .09 258));
+  --accent-ink:   oklch(99% 0 0);
+  --accent-ink:   light-dark(oklch(99% 0 0), oklch(20% .02 258));
+  --accent-wash:  oklch(52% .105 258 / .09);
+  --accent-wash:  light-dark(oklch(52% .105 258 / .09), oklch(76% .1 258 / .14));
+
+  /* Glass. --pane is the workhorse; --pane-solid is for anything that has to
+     carry small text, where translucency would cost too much contrast. */
+  --pane:        oklch(100% 0 0 / .62);
+  --pane:        light-dark(oklch(100% 0 0 / .62), oklch(100% 0 0 / .07));
+  --pane-raised: oklch(100% 0 0 / .74);
+  --pane-raised: light-dark(oklch(100% 0 0 / .74), oklch(100% 0 0 / .11));
+  --pane-solid:  oklch(99.5% .002 255);
+  --pane-solid:  light-dark(oklch(99.5% .002 255), oklch(22% .014 255));
+  --hairline:    oklch(100% 0 0 / .65);
+  --hairline:    light-dark(oklch(100% 0 0 / .65), oklch(100% 0 0 / .1));
+  --edge:        oklch(20% .02 255 / .07);   /* outer definition line */
+  --edge:        light-dark(oklch(20% .02 255 / .07), oklch(0% 0 0 / .3));
+  --highlight:   oklch(100% 0 0 / .75);      /* the lit top edge */
+  --highlight:   light-dark(oklch(100% 0 0 / .75), oklch(100% 0 0 / .13));
+  --blur: saturate(180%) blur(20px);
+
+  /* light-dark() takes colours, not whole shadow lists, so the shadows are
+     assembled from colour tokens rather than being tokens themselves. */
+  --shadow-near:  oklch(20% .02 255 / .04);
+  --shadow-near:  light-dark(oklch(20% .02 255 / .04), oklch(0% 0 0 / .3));
+  --shadow-far:   oklch(20% .02 255 / .22);
+  --shadow-far:   light-dark(oklch(20% .02 255 / .22), oklch(0% 0 0 / .55));
+  --shadow-near-h: oklch(20% .02 255 / .06);
+  --shadow-near-h: light-dark(oklch(20% .02 255 / .06), oklch(0% 0 0 / .35));
+  --shadow-far-h:  oklch(20% .02 255 / .28);
+  --shadow-far-h:  light-dark(oklch(20% .02 255 / .28), oklch(0% 0 0 / .6));
+
+  --shadow:       0 1px 2px var(--shadow-near), 0 10px 30px -14px var(--shadow-far);
+  --shadow-hover: 0 2px 6px var(--shadow-near-h), 0 18px 44px -16px var(--shadow-far-h);
+
+  /* Errors. One hue, two lightnesses, same idea as everything above. */
+  --danger:      oklch(52% .16 25);
+  --danger:      light-dark(oklch(52% .16 25), oklch(78% .13 25));
+  --danger-line: oklch(52% .16 25 / .6);
+  --danger-line: light-dark(oklch(52% .16 25 / .6), oklch(78% .13 25 / .5));
+
   --s-1: .25rem;
   --s-2: .5rem;
   --s-3: .75rem;
@@ -33,81 +101,130 @@
   --s-5: 1.5rem;
   --s-6: 2rem;
   --s-7: 3rem;
-  --s-8: 4rem;
+  --s-8: 4.5rem;
 
-  /* Softer corners and a warm, low shadow. Both are doing the same job as
-     the wool rug and the linen curtain: taking the hard edge off. The shadow
-     is tinted navy rather than black — nothing in this room is black. */
-  --radius: .75rem;
-  --radius-sm: .5rem;
+  --radius-sm:   .625rem;
+  --radius:      1.125rem;
+  --radius-lg:   1.5rem;
   --radius-pill: 999px;
-  --lift: 0 1px 2px rgba(46, 62, 80, .05), 0 6px 16px -8px rgba(46, 62, 80, .14);
-  --lift-hover: 0 2px 4px rgba(46, 62, 80, .06), 0 12px 24px -10px rgba(46, 62, 80, .18);
 
-  --chip: #eae5d9;         /* the label stock every category tag is printed on */
-  --wrap: 68rem;
-  --measure: 36rem;        /* comfortable reading width for body copy */
+  --wrap: 70rem;
+  --measure: 36rem;
 }
 
-/* --- Category colour code -------------------------------------------------
-   The organising idea, borrowed from how people actually run a homeschool: a
-   coloured dot on the spine of the book, a strip of tape on the bin. The dot
-   carries the code; the label text stays one calm navy on every tag, so a row
-   of categories reads as a set rather than as nine competing colours.
+/* The two forced states. Setting color-scheme is the entire switch: every
+   light-dark() above resolves from it, and so do form controls, scrollbars
+   and the browser's own UI — which is why the toggle needs no other rules. */
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"]  { color-scheme: dark; }
 
-   Nine hues, evenly spaced 40 degrees apart, anchored on terracotta's own hue
-   so the ring passes through the palette's colours on its way round. Lightness
-   and chroma are identical for all nine (oklch L .56 / C .096) — only the hue
-   moves. That is what keeps them muted and of a family; a chroma of .096 is
-   roughly a third of a saturated colour. All nine clear 3.5:1 against the chip,
-   above the 3:1 WCAG floor for a graphical object, and none clips sRGB. */
+/* Category colours: nine hues, 40 degrees apart, identical lightness and
+   chroma so a row of them reads as one set rather than nine arguments. Only
+   the hue moves. The dark theme lifts all nine at once, because a mid-tone
+   dot disappears against a dark pane. */
+[class*="c"] { --code: oklch(55% .078 var(--code-h, 255)); }
+[class*="c"] {
+  --code: light-dark(
+    oklch(55% .078 var(--code-h, 255)),
+    oklch(76% .095 var(--code-h, 255))
+  );
+}
 
-.c1 { --code: #a45f4a; }  /* terracotta  38deg — the palette's own */
-.c2 { --code: #936d2a; }  /* amber oak   78deg — near honey oak */
-.c3 { --code: #6f7c35; }  /* ochre olive 118deg */
-.c4 { --code: #3c855e; }  /* sage green  158deg — near muted sage */
-.c5 { --code: #008589; }  /* teal       198deg */
-.c6 { --code: #357ca6; }  /* slate blue 238deg — near navy slate */
-.c7 { --code: #676eac; }  /* periwinkle 278deg */
-.c8 { --code: #8c6299; }  /* plum       318deg */
-.c9 { --code: #a15b74; }  /* mulberry   358deg */
+/* Nine hues. Only the number changes. */
+.c1 { --code-h: 38; }   /* terracotta */
+.c2 { --code-h: 78; }   /* amber */
+.c3 { --code-h: 118; }  /* olive */
+.c4 { --code-h: 158; }  /* green */
+.c5 { --code-h: 198; }  /* teal */
+.c6 { --code-h: 238; }  /* blue */
+.c7 { --code-h: 278; }  /* periwinkle */
+.c8 { --code-h: 318; }  /* plum */
+.c9 { --code-h: 358; }  /* mulberry */
 .c-all { --code: var(--muted); }
 
+/* --- Page ---------------------------------------------------------------- */
+
 * { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
 
 body {
   margin: 0;
   color: var(--ink);
-  /* Cream wall, with a linen weave sitting almost below the threshold of
-     noticing. Two hairline gratings at about 2% — enough to stop a large
-     field of cream reading as flat screen white, not enough to see. */
-  background-color: var(--bg);
-  background-image:
-    repeating-linear-gradient(90deg, rgba(46, 62, 80, .018) 0 1px, transparent 1px 3px),
-    repeating-linear-gradient(0deg,  rgba(46, 62, 80, .018) 0 1px, transparent 1px 3px);
-  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+        Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -.003em;
+}
+
+/* The wash sits behind everything and does not scroll, so panes moving over
+   it change what they are refracting. Fixed rather than painted on <body>
+   because a scrolling gradient on a long page looks like a bug. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(58rem 40rem at 12% -8%,  var(--wash-1), transparent 62%),
+    radial-gradient(48rem 34rem at 96% 2%,   var(--wash-2), transparent 58%),
+    radial-gradient(44rem 40rem at 62% 108%, var(--wash-3), transparent 60%);
 }
 
 .wrap { max-width: var(--wrap); margin: 0 auto; padding-inline: var(--s-5); }
 
-a { color: var(--accent); }
-a:hover { color: var(--rust-darker); }
+a { color: var(--accent); text-underline-offset: .18em; }
+a:hover { color: var(--accent-hover); }
 
 :focus-visible {
-  outline: 2px solid var(--rust-deep);
-  outline-offset: 2px;
-  border-radius: 2px;
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 4px;
 }
 
 .skip { position: absolute; left: -9999px; }
-.skip:focus { left: var(--s-4); top: var(--s-4); background: var(--surface); padding: var(--s-2) var(--s-4); z-index: 10; }
+.skip:focus {
+  left: var(--s-4); top: var(--s-4); z-index: 100;
+  background: var(--pane-solid);
+  padding: var(--s-2) var(--s-4);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+}
+
+/* --- The glass recipe ----------------------------------------------------
+   One place, so every pane on the site is the same pane. The inset highlight
+   is the light catching the top edge; without it a translucent box reads as
+   washed out rather than as glass. */
+
+.site-header,
+.panel,
+.callout,
+.program-card,
+.program-aside,
+.search,
+.theme-switch,
+.filters a,
+.categories a,
+.flash {
+  background: var(--pane);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border: 1px solid var(--hairline);
+  box-shadow: inset 0 1px 0 var(--highlight), 0 0 0 1px var(--edge);
+}
 
 /* --- Frame --------------------------------------------------------------- */
 
 .site-header {
-  background: var(--surface);
-  border-top: 3px solid var(--honey);
-  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  border-inline: 0;
+  border-top: 0;
+  border-radius: 0;
+  box-shadow: inset 0 -1px 0 var(--edge), inset 0 1px 0 var(--highlight);
 }
 .site-header .wrap {
   display: flex;
@@ -115,58 +232,134 @@ a:hover { color: var(--rust-darker); }
   gap: var(--s-3) var(--s-5);
   align-items: center;
   justify-content: space-between;
-  padding-block: var(--s-4);
+  padding-block: var(--s-3);
 }
-.brand { font-weight: 700; font-size: 1.05rem; text-decoration: none; color: var(--navy); }
-.site-header nav { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-5); align-items: center; }
-.site-header nav a { text-decoration: none; color: var(--navy); }
-.site-header nav a:hover { color: var(--rust-deep); }
+.brand {
+  font-weight: 650;
+  font-size: 1.02rem;
+  letter-spacing: -.015em;
+  text-decoration: none;
+  color: var(--ink-strong);
+}
+.site-header nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-4);
+  align-items: center;
+  /* Without this the nav is sized to its content and refuses to shrink,
+     which on a phone pushes the whole document wider than the viewport. */
+  min-width: 0;
+}
+.site-header nav a {
+  text-decoration: none;
+  color: var(--muted);
+  font-size: .95rem;
+  padding: .35rem .6rem;
+  border-radius: var(--radius-sm);
+}
+.site-header nav a:hover { color: var(--ink-strong); background: var(--pane-raised); }
 
 .cta {
-  background: var(--rust-deep);
-  color: var(--linen) !important;
-  padding: .5rem 1rem;
-  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  background: var(--accent);
+  color: var(--accent-ink) !important;
+  padding: .5rem 1.1rem;
+  border-radius: var(--radius-pill);
   text-decoration: none;
+  font-weight: 550;
+  font-size: .95rem;
+  box-shadow: inset 0 1px 0 oklch(100% 0 0 / .22), 0 2px 8px -2px var(--accent-wash);
 }
-.cta:hover { background: var(--rust-darker); color: var(--linen); }
+.cta:hover { background: var(--accent-hover); color: var(--accent-ink); }
+.site-header nav a.cta:hover { background: var(--accent-hover); }
+
+@media (max-width: 40rem) {
+  .site-header .wrap { gap: var(--s-2); padding-block: var(--s-2); }
+  .site-header nav { width: 100%; gap: var(--s-1) var(--s-2); }
+  .site-header nav a { padding: .3rem .5rem; font-size: .9rem; }
+  .site-header nav .cta { margin-left: auto; }
+}
 
 main { padding-block: var(--s-7) var(--s-8); }
-
-/* Vertical rhythm between top-level blocks, so no template has to carry its
-   own margins. Anything that follows a section is pushed down once. */
+@media (max-width: 40rem) { main { padding-block: var(--s-6) var(--s-7); } }
 main > section + section,
 main > article + section,
 main > section + article { margin-top: var(--s-7); }
 main > section > :last-child { margin-bottom: 0; }
 
 .site-footer {
-  /* The brief allows two wall colours. The header and body take the cream;
-     the footer takes the sage, which closes the page on the calm end of the
-     palette instead of on a slab of dark. Navy goes back to being what the
-     palette says it is: text, labels and metal. */
-  background: var(--wall-sage);
-  border-top: 1px solid var(--sage);
-  color: var(--navy);
+  border-top: 1px solid var(--hairline);
+  box-shadow: inset 0 1px 0 var(--edge);
+  color: var(--muted);
   padding-block: var(--s-6);
   font-size: .9rem;
 }
-.site-footer a { color: var(--rust-deep); }
-.site-footer a:hover { color: var(--rust-darker); }
 .site-footer p { margin: 0 0 var(--s-2); max-width: 46rem; }
 .site-footer p:last-child { margin-bottom: 0; }
 
-/* --- Typography ---------------------------------------------------------- */
+/* A segmented control rather than a cycling button, so the current setting
+   is legible without clicking it and each state is its own target. */
+.theme-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  margin-top: var(--s-5);
+}
+/* [hidden] is a UA rule and loses to the class above, so it has to be said
+   again here or the control flashes up before the script hides it. */
+.theme-switch[hidden] { display: none; }
+.theme-switch button {
+  padding: .3rem .85rem;
+  font-size: .85rem;
+  font-weight: 520;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+}
+.theme-switch button:hover { color: var(--ink-strong); background: var(--pane-raised); }
+.theme-switch button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: inset 0 1px 0 oklch(100% 0 0 / .22);
+}
 
-h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 var(--s-3); }
-h2 { font-size: 1.4rem; line-height: 1.3; margin: 0 0 var(--s-4); }
-h3 { font-size: 1.1rem; line-height: 1.35; margin: 0 0 var(--s-2); }
+/* --- Typography ---------------------------------------------------------- */
+/* Tighter tracking as type gets larger, which is the one typographic habit
+   that most separates a modern interface from a default one. */
+
+h1, h2, h3 { color: var(--ink-strong); }
+h1 {
+  font-size: clamp(2.1rem, 1.5rem + 2.4vw, 3.1rem);
+  line-height: 1.08;
+  letter-spacing: -.028em;
+  font-weight: 680;
+  margin: 0 0 var(--s-4);
+}
+h2 {
+  font-size: 1.45rem;
+  line-height: 1.25;
+  letter-spacing: -.018em;
+  font-weight: 640;
+  margin: 0 0 var(--s-4);
+}
+h3 {
+  font-size: 1.08rem;
+  line-height: 1.35;
+  letter-spacing: -.012em;
+  font-weight: 620;
+  margin: 0 0 var(--s-2);
+}
 
 .lede {
-  font-size: 1.125rem;
+  font-size: 1.2rem;
+  line-height: 1.5;
   color: var(--muted);
   max-width: var(--measure);
-  margin: 0 0 var(--s-5);
+  margin: 0 0 var(--s-6);
+  letter-spacing: -.01em;
 }
 
 .prose { max-width: var(--measure); }
@@ -176,91 +369,89 @@ h3 { font-size: 1.1rem; line-height: 1.35; margin: 0 0 var(--s-2); }
 .prose h2 { margin: var(--s-6) 0 var(--s-3); }
 .prose h3 { margin: var(--s-5) 0 var(--s-2); }
 
-/* --- Search and filters -------------------------------------------------- */
+.hero { padding-block: var(--s-4) var(--s-2); }
 
-.search { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: 0 0 var(--s-5); }
+/* --- Search -------------------------------------------------------------- */
+/* The input and its button share one pane, so the pair reads as a single
+   control rather than as two things that happen to be adjacent. */
+
+.search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  padding: var(--s-1);
+  border-radius: var(--radius-pill);
+  margin: 0 0 var(--s-5);
+  max-width: 34rem;
+}
 .search label { position: absolute; left: -9999px; }
 .search input {
-  flex: 1 1 18rem;
-  padding: .6rem .8rem;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--ink);
-  font-size: 1rem;
-}
-.search button,
-form button {
-  padding: .6rem 1.2rem;
+  flex: 1 1 14rem;
+  min-width: 0;
+  padding: .55rem 1rem;
   border: 0;
-  border-radius: var(--radius-sm);
-  background: var(--rust-deep);
-  color: var(--linen);
-  font-size: 1rem;
-  cursor: pointer;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
 }
-.search button:hover,
-form button:hover { background: var(--rust-darker); }
+.search input::placeholder { color: var(--muted); }
+.search input:focus { outline: 0; }
+.search:focus-within { box-shadow: inset 0 1px 0 var(--highlight), 0 0 0 2px var(--accent); }
+
+button, .search button, form button {
+  padding: .55rem 1.2rem;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: inherit;
+  font-weight: 550;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 oklch(100% 0 0 / .22);
+}
+button:hover, form button:hover { background: var(--accent-hover); }
+
+/* --- Chips: filters, categories, tags ------------------------------------ */
 
 .filters { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: 0 0 var(--s-6); }
-.filters a {
+.filters a,
+.categories a {
   display: inline-flex;
   align-items: center;
-  gap: .4rem;
+  gap: .5rem;
   text-decoration: none;
-  padding: .35rem .8rem .35rem .65rem;
-  border: 1px solid var(--line-strong);
+  padding: .4rem .9rem .4rem .75rem;
   border-radius: var(--radius-pill);
-  font-size: .9rem;
-  color: var(--muted);
-  background: var(--surface);
+  font-size: .925rem;
+  color: var(--ink);
 }
-.filters a::before {
+.filters a::before,
+.categories a::before,
+.tag::before {
   content: "";
   flex: none;
-  width: .45rem;
-  height: .45rem;
+  width: .5rem;
+  height: .5rem;
   border-radius: 50%;
   background: var(--code, var(--muted));
+  box-shadow: 0 0 0 3px oklch(from var(--code, oklch(55% 0 255)) l c h / .16);
 }
-.filters a:hover { border-color: var(--code, var(--sage-deep)); color: var(--navy); }
-.filters a.active { background: var(--navy); border-color: var(--navy); color: var(--cream); }
-/* On the active chip the dot would sit on navy, where the muted codes lose
-   their contrast. Drop it and let the fill do the work. */
+.filters a:hover,
+.categories a:hover { background: var(--pane-raised); color: var(--ink-strong); }
+.filters a.active {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
+  padding-left: .9rem;
+}
 .filters a.active::before { display: none; }
-.filters a.active { padding-left: .8rem; }
-
-/* A panel of the second wall colour. Contained and rounded rather than
-   full-bleed, so it reads as a rug or a pinboard in a cream room — the point
-   of the brief being a room you live in, not a corridor you pass through. */
-.wall-sage {
-  background: var(--wall-sage);
-  border-radius: var(--radius);
-  padding: var(--s-6);
-}
-@media (max-width: 34rem) { .wall-sage { padding: var(--s-5); } }
 
 .categories { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: var(--s-2); }
-.categories a {
-  display: flex;
-  align-items: center;
-  gap: .5rem;
-  padding: .55rem 1rem .55rem .85rem;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  color: var(--navy);
-  border-radius: var(--radius-sm);
-  text-decoration: none;
-}
-.categories a::before {
-  content: "";
-  flex: none;
-  width: .6rem;
-  height: .6rem;
-  border-radius: 50%;
-  background: var(--code, var(--sage));
-}
-.categories a:hover { border-color: var(--code, var(--sage)); background: var(--cream); }
+
+/* A panel of glass — the browse block and anything else that groups things
+   without being a card. */
+.panel { border-radius: var(--radius-lg); padding: var(--s-6); }
+@media (max-width: 34rem) { .panel { padding: var(--s-5); } }
 
 /* --- Program cards ------------------------------------------------------- */
 
@@ -270,33 +461,27 @@ form button:hover { background: var(--rust-darker); }
   margin: 0;
   display: grid;
   gap: var(--s-4);
-  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(18.5rem, 100%), 1fr));
 }
 .program-card {
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-top: 3px solid var(--honey);
   border-radius: var(--radius);
   padding: var(--s-5);
-  box-shadow: var(--lift);
-  transition: box-shadow .18s ease, transform .18s ease;
+  box-shadow: inset 0 1px 0 var(--highlight), 0 0 0 1px var(--edge), var(--shadow);
+  transition: box-shadow .22s ease, transform .22s ease, background-color .22s ease;
 }
 .program-card:hover {
-  box-shadow: var(--lift-hover);
+  background: var(--pane-raised);
+  box-shadow: inset 0 1px 0 var(--highlight), 0 0 0 1px var(--edge), var(--shadow-hover);
   transform: translateY(-2px);
 }
-@media (prefers-reduced-motion: reduce) {
-  .program-card { transition: none; }
-  .program-card:hover { transform: none; }
-}
 .program-card h3 { margin: 0; }
-.program-card h3 a { text-decoration: none; color: var(--navy); }
-.program-card h3 a:hover { color: var(--rust-deep); }
-.program-card p { margin: 0; }
-.program-card .meta { margin-top: auto; padding-top: var(--s-2); }
+.program-card h3 a { text-decoration: none; color: var(--ink-strong); }
+.program-card h3 a:hover { color: var(--accent); }
+.program-card p { margin: 0; color: var(--muted); }
+.program-card .meta { margin-top: auto; padding-top: var(--s-3); }
 
 .meta {
   display: flex;
@@ -310,30 +495,54 @@ form button:hover { background: var(--rust-darker); }
   display: inline-flex;
   align-items: center;
   gap: .4rem;
-  background: var(--chip);
+  background: var(--accent-wash);
   border-radius: var(--radius-pill);
-  padding: .2rem .7rem .2rem .55rem;
+  padding: .22rem .7rem .22rem .6rem;
   text-decoration: none;
   color: var(--muted);
+  font-size: .82rem;
 }
-/* The dot is the code. Everything else about a tag stays the same, which is
-   why nine of them in a row do not shout. */
-.tag::before {
-  content: "";
-  flex: none;
-  width: .5rem;
-  height: .5rem;
-  border-radius: 50%;
-  background: var(--code, var(--sage));
-}
-a.tag:hover { background: var(--sage-tint); color: var(--navy); }
+a.tag:hover { color: var(--ink-strong); }
 
 .empty { color: var(--muted); }
 
 /* --- Program detail ------------------------------------------------------ */
 
-.crumb { font-size: .9rem; margin: 0 0 var(--s-5); }
-.program .logo { max-width: 160px; height: auto; margin-bottom: var(--s-4); }
+.crumb { font-size: .9rem; margin: 0 0 var(--s-5); color: var(--muted); }
+
+/* Prose wants a 36rem measure; a definition list of contact details wants to
+   be narrow and scannable. Side by side they each get what they want, and
+   the page stops being one long column with a stretched table at the bottom. */
+.program-layout { display: grid; gap: var(--s-6); align-items: start; }
+@media (min-width: 62rem) {
+  .program-layout { grid-template-columns: minmax(0, 1fr) 20rem; gap: var(--s-7); }
+  .program-aside { position: sticky; top: 5.5rem; }
+}
+.program-aside {
+  border-radius: var(--radius);
+  padding: var(--s-5);
+  box-shadow: inset 0 1px 0 var(--highlight), 0 0 0 1px var(--edge), var(--shadow);
+}
+.program-aside .facts {
+  grid-template-columns: 1fr;
+  gap: var(--s-1);
+  margin: 0;
+  padding-top: 0;
+  border-top: 0;
+  box-shadow: none;
+  font-size: .95rem;
+}
+.program-aside .facts dd { margin-bottom: var(--s-4); }
+.program-aside .facts > :last-child { margin-bottom: 0; }
+/* A full URL in a 20rem column has to be allowed to break somewhere. */
+.program-aside .facts dd { overflow-wrap: anywhere; }
+.program-aside .verified {
+  margin: var(--s-4) 0 0;
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--hairline);
+  box-shadow: 0 -1px 0 var(--edge);
+}
+.program .logo { max-width: 160px; height: auto; margin-bottom: var(--s-4); border-radius: var(--radius-sm); }
 .program .meta { margin: 0 0 var(--s-5); }
 .program .prose { margin-bottom: var(--s-6); }
 
@@ -343,7 +552,8 @@ a.tag:hover { background: var(--sage-tint); color: var(--navy); }
   gap: var(--s-3) var(--s-6);
   margin: 0 0 var(--s-5);
   padding-top: var(--s-5);
-  border-top: 1px solid var(--line-strong);
+  border-top: 1px solid var(--hairline);
+  box-shadow: 0 -1px 0 var(--edge);
 }
 .facts dt { font-weight: 600; color: var(--muted); }
 .facts dd { margin: 0; }
@@ -354,35 +564,28 @@ a.tag:hover { background: var(--sage-tint); color: var(--navy); }
 
 .verified { color: var(--muted); font-size: .9rem; margin: 0; }
 
-/* --- Callout ------------------------------------------------------------- */
+/* --- Callout and flashes ------------------------------------------------- */
 
 .callout {
-  background: var(--honey-tint);
-  border-left: 4px solid var(--honey);
-  border-radius: var(--radius);
-  padding: var(--s-5) var(--s-6);
+  border-radius: var(--radius-lg);
+  padding: var(--s-6);
+  background:
+    linear-gradient(135deg, var(--accent-wash), transparent 55%),
+    var(--pane);
 }
 .callout h2 { margin-top: 0; }
-.callout p { margin: 0 0 var(--s-4); max-width: var(--measure); }
+.callout p { margin: 0 0 var(--s-4); max-width: var(--measure); color: var(--muted); }
 .callout p:last-child { margin-bottom: 0; }
-.callout .cta { display: inline-block; text-decoration: none; }
-
-/* --- Flash messages ------------------------------------------------------ */
+.callout .cta { display: inline-flex; text-decoration: none; }
 
 .flash {
   padding: var(--s-3) var(--s-4);
   border-radius: var(--radius-sm);
-  background: var(--sage-tint);
-  border: 1px solid var(--sage);
   margin: 0 0 var(--s-5);
 }
-.flash.success { background: var(--sage-tint); border-color: var(--sage); }
-.flash.error { background: #f7e3dc; border-color: var(--rust); color: var(--rust-deep); }
+.flash.error { color: var(--danger); border-color: var(--danger-line); }
 
 /* --- Public forms -------------------------------------------------------- */
-/* The registration form is long by design: the provider filling it in is the
-   reason an administrator never has to retype anything. Grouping and breathing
-   room are what keep it from feeling like a tax form. */
 
 .stack { max-width: var(--measure); }
 .stack > p { margin: 0 0 var(--s-5); }
@@ -390,31 +593,44 @@ a.tag:hover { background: var(--sage-tint); color: var(--navy); }
 .form-long { max-width: 40rem; }
 .form-long fieldset {
   border: 0;
-  border-top: 1px solid var(--line-strong);
+  border-top: 1px solid var(--hairline);
+  box-shadow: 0 -1px 0 var(--edge);
   padding: var(--s-5) 0 0;
   margin: var(--s-7) 0 0;
 }
 .form-long fieldset:first-of-type { margin-top: var(--s-6); }
-.form-long legend { font-weight: 700; font-size: 1.1rem; padding: 0; color: var(--navy); }
+.form-long legend {
+  font-weight: 640;
+  font-size: 1.1rem;
+  letter-spacing: -.015em;
+  padding: 0;
+  color: var(--ink-strong);
+}
 .hint { color: var(--muted); font-size: .9rem; margin: var(--s-2) 0 var(--s-5); max-width: var(--measure); }
 .form-long legend + .hint { margin-top: var(--s-3); }
 
 .field { margin: 0 0 var(--s-5); max-width: var(--measure); }
 .field:last-child { margin-bottom: 0; }
-.field label, .field .group-label { display: block; font-weight: 600; margin-bottom: var(--s-1); }
-.stack label { display: block; font-weight: 600; margin-bottom: var(--s-1); }
+.field label, .field .group-label,
+.stack label { display: block; font-weight: 580; margin-bottom: var(--s-2); color: var(--ink-strong); }
+
 .field input[type=text], .field input[type=email], .field input[type=url],
 .field input[type=tel], .field input[type=number], .field input[type=file], .field textarea,
 .stack input[type=text], .stack input[type=email], .stack input[type=url],
 .stack input[type=tel], .stack textarea {
   width: 100%;
-  padding: .6rem .8rem;
-  border: 1px solid var(--line-strong);
+  padding: .6rem .85rem;
+  border: 1px solid var(--hairline);
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background: var(--pane);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  box-shadow: inset 0 1px 0 var(--highlight), 0 0 0 1px var(--edge);
   color: var(--ink);
   font: inherit;
 }
+.field input:focus-visible, .field textarea:focus-visible,
+.stack input:focus-visible, .stack textarea:focus-visible { outline-offset: 1px; }
 .field textarea { resize: vertical; min-height: 7rem; }
 .field .helptext, .stack .helptext {
   display: block;
@@ -428,15 +644,57 @@ a.tag:hover { background: var(--sage-tint); color: var(--navy); }
   margin: var(--s-2) 0 0;
   display: grid;
   gap: var(--s-2);
-  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(14rem, 100%), 1fr));
 }
-.field ul label, .stack ul label { font-weight: 400; display: inline; }
+.field ul label, .stack ul label { font-weight: 400; display: inline; color: var(--ink); }
 .field-check label { display: inline; font-weight: 400; }
-.field .req { color: var(--rust-deep); }
+.field .req { color: var(--accent); }
 
-.has-error input, .has-error textarea { border-color: var(--rust-deep); }
-.field-error { color: var(--rust-deep); font-size: .9rem; margin: 0 0 var(--s-2); }
+.has-error input, .has-error textarea { border-color: var(--danger-line); }
+.field-error { color: var(--danger); font-size: .9rem; margin: 0 0 var(--s-2); }
 
 .form-actions { margin-top: var(--s-6); }
-.form-long .form-actions { border-top: 1px solid var(--line-strong); padding-top: var(--s-5); margin-top: var(--s-7); }
+.form-long .form-actions {
+  border-top: 1px solid var(--hairline);
+  box-shadow: 0 -1px 0 var(--edge);
+  padding-top: var(--s-5);
+  margin-top: var(--s-7);
+}
 .form-actions .hint { margin: var(--s-3) 0 0; }
+
+/* --- Fallbacks -----------------------------------------------------------
+   Translucency is the first thing to give up, and it has to be given up in
+   two cases: a browser that cannot blur, and a reader who has asked their
+   system for less transparency. In both, panes go solid and keep their
+   border — the layout never depended on the blur. */
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .site-header, .panel, .callout, .program-card, .program-aside, .search,
+  .theme-switch, .filters a, .categories a, .flash, .field input,
+  .field textarea { background: var(--pane-solid); }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .site-header, .panel, .callout, .program-card, .program-aside, .search,
+  .theme-switch, .filters a, .categories a, .flash, .field input,
+  .field textarea {
+    background: var(--pane-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  body::before { opacity: .35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .program-card { transition: none; }
+  .program-card:hover { transform: none; }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --hairline: oklch(45% .02 255 / .6);
+    --hairline: light-dark(oklch(45% .02 255 / .6), oklch(80% .02 255 / .5));
+    --muted:    oklch(38% .014 255);
+    --muted:    light-dark(oklch(38% .014 255), oklch(84% .014 255));
+  }
+}

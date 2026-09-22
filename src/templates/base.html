@@ -3,7 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#f4f1ea">
+{% comment %}Tints the browser chrome on mobile. The media attributes make
+these follow the system on their own; the theme script below rewrites them
+when someone forces a theme, so the top bar cannot end up dark over a light
+page.{% endcomment %}
+<meta name="theme-color" data-scheme="light" content="#f6f6f8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" data-scheme="dark" content="#1b1c20" media="(prefers-color-scheme: dark)">
 <title>{% block title %}{{ site_name }}{% endblock %}</title>
 <meta name="description" content="{% block meta_description %}A directory of homeschool co-ops, classes, sports, and support groups in Volusia County, Florida.{% endblock %}">
 
@@ -18,6 +23,67 @@ these tags matter more than they usually would.{% endcomment %}
 <meta name="twitter:card" content="summary">
 
 <link rel="canonical" href="{{ site_base_url }}{{ request.path }}">
+{% comment %}The only JavaScript on the site. It is inline and in <head> on
+purpose: a stored theme has to be applied before the first paint, and a
+deferred or external script would let the page render in the system theme and
+then visibly correct itself. Everything else it does — revealing the control
+and wiring the buttons — waits for the DOM. If a Content-Security-Policy is
+ever added, this block needs a hash or a nonce.{% endcomment %}
+<script>
+(function () {
+  var KEY = "theme";
+  var root = document.documentElement;
+  var stored = null;
+  try { stored = localStorage.getItem(KEY); } catch (e) { /* private mode */ }
+
+  var metas = {
+    light: document.querySelector('meta[name="theme-color"][data-scheme="light"]'),
+    dark: document.querySelector('meta[name="theme-color"][data-scheme="dark"]')
+  };
+
+  function apply(choice) {
+    if (choice === "light" || choice === "dark") root.setAttribute("data-theme", choice);
+    else root.removeAttribute("data-theme");   // "auto": follow the system
+
+    // Keep the browser chrome in step. "not all" switches a meta off.
+    ["light", "dark"].forEach(function (scheme) {
+      var meta = metas[scheme];
+      if (!meta) return;
+      meta.media = !choice || choice === "auto"
+        ? "(prefers-color-scheme: " + scheme + ")"
+        : (choice === scheme ? "all" : "not all");
+    });
+  }
+  apply(stored);
+
+  document.addEventListener("DOMContentLoaded", function () {
+    var group = document.querySelector(".theme-switch");
+    if (!group) return;
+    var buttons = group.querySelectorAll("[data-theme-choice]");
+
+    function mark(choice) {
+      buttons.forEach(function (b) {
+        b.setAttribute("aria-pressed", String(b.dataset.themeChoice === choice));
+      });
+    }
+    mark(stored || "auto");
+    group.hidden = false;   // hidden until here, so no-JS sees no dead control
+
+    group.addEventListener("click", function (event) {
+      var button = event.target.closest("[data-theme-choice]");
+      if (!button) return;
+      var choice = button.dataset.themeChoice;
+      apply(choice);
+      mark(choice);
+      try {
+        if (choice === "auto") localStorage.removeItem(KEY);
+        else localStorage.setItem(KEY, choice);
+      } catch (e) { /* the page still works, the choice just will not stick */ }
+    });
+  });
+})();
+</script>
+
 <link rel="stylesheet" href="{% static 'css/site.css' %}">
 </head>
 <body>
@@ -47,6 +113,12 @@ these tags matter more than they usually would.{% endcomment %}
   <div class="wrap">
     <p>{{ site_name }}. Programs are listed without regard to affiliation; please ask each program directly about its approach.</p>
     <p><a href="{% url 'directory:register' %}">Register a program</a> &middot; <a href="{% url 'directory:refer' %}">Suggest one you do not run</a></p>
+
+    <div class="theme-switch" role="group" aria-label="Appearance" hidden>
+      <button type="button" data-theme-choice="auto" aria-pressed="true">Auto</button>
+      <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+      <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+    </div>
   </div>
 </footer>
 </body>

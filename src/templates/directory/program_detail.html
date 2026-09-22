@@ -19,25 +19,31 @@
     {% for category in program.categories.all %}<a class="tag c{{ category|colour_code }}" href="{{ category.get_absolute_url }}">{{ category.name }}</a>{% endfor %}
   </p>
 
-  {% if program.description %}<div class="prose">{{ program.description|safe }}</div>{% endif %}
+  <div class="program-layout">
+    <div class="program-body">
+      {% if program.description %}<div class="prose">{{ program.description|safe }}</div>{% endif %}
+    </div>
 
-  <dl class="facts">
-    {% if program.meeting_schedule %}<dt>When it meets</dt><dd>{{ program.meeting_schedule|linebreaksbr }}</dd>{% endif %}
-    {% if program.serves_grades %}<dt>Grades</dt><dd>{{ program.serves_grades }}</dd>{% endif %}
-    {% if program.age_range_display %}<dt>Ages</dt><dd>{{ program.age_range_display }}</dd>{% endif %}
-    {% if program.cost_notes %}<dt>Cost</dt><dd>{{ program.cost_notes|linebreaksbr }}</dd>{% endif %}
-    {% if program.street or program.city %}<dt>Where</dt><dd>{{ program.street }}{% if program.street and program.city %}, {% endif %}{{ program.city }} {{ program.zip_code }}</dd>{% endif %}
-    {% if program.website %}<dt>Website</dt><dd><a href="{{ program.website }}" rel="nofollow noopener">{{ program.website }}</a></dd>{% endif %}
-    {% if program.email %}<dt>Email</dt><dd><a href="mailto:{{ program.email }}">{{ program.email }}</a></dd>{% endif %}
-    {% if program.phone %}<dt>Phone</dt><dd>{{ program.phone }}</dd>{% endif %}
-    {% for contact in contacts %}
-      <dt>{{ contact.role|default:"Contact" }}</dt>
-      <dd>{{ contact.name }}{% if contact.email %} — <a href="mailto:{{ contact.email }}">{{ contact.email }}</a>{% endif %}{% if contact.phone %} — {{ contact.phone }}{% endif %}</dd>
-    {% endfor %}
-  </dl>
+    <aside class="program-aside">
+      <dl class="facts">
+        {% if program.meeting_schedule %}<dt>When it meets</dt><dd>{{ program.meeting_schedule|linebreaksbr }}</dd>{% endif %}
+        {% if program.serves_grades %}<dt>Grades</dt><dd>{{ program.serves_grades }}</dd>{% endif %}
+        {% if program.age_range_display %}<dt>Ages</dt><dd>{{ program.age_range_display }}</dd>{% endif %}
+        {% if program.cost_notes %}<dt>Cost</dt><dd>{{ program.cost_notes|linebreaksbr }}</dd>{% endif %}
+        {% if program.street or program.city %}<dt>Where</dt><dd>{{ program.street }}{% if program.street and program.city %}, {% endif %}{{ program.city }} {{ program.zip_code }}</dd>{% endif %}
+        {% if program.website %}<dt>Website</dt><dd><a href="{{ program.website }}" rel="nofollow noopener">{{ program.website }}</a></dd>{% endif %}
+        {% if program.email %}<dt>Email</dt><dd><a href="mailto:{{ program.email }}">{{ program.email }}</a></dd>{% endif %}
+        {% if program.phone %}<dt>Phone</dt><dd>{{ program.phone }}</dd>{% endif %}
+        {% for contact in contacts %}
+          <dt>{{ contact.role|default:"Contact" }}</dt>
+          <dd>{{ contact.name }}{% if contact.email %} — <a href="mailto:{{ contact.email }}">{{ contact.email }}</a>{% endif %}{% if contact.phone %} — {{ contact.phone }}{% endif %}</dd>
+        {% endfor %}
+      </dl>
 
-  {% if program.last_verified_on %}
-    <p class="verified">We last confirmed these details on {{ program.last_verified_on|date:"F j, Y" }}.</p>
-  {% endif %}
+      {% if program.last_verified_on %}
+        <p class="verified">We last confirmed these details on {{ program.last_verified_on|date:"F j, Y" }}.</p>
+      {% endif %}
+    </aside>
+  </div>
 </article>
 {% endblock %}
