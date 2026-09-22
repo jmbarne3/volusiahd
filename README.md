@@ -33,10 +33,64 @@ uv run python -c "import secrets; print(secrets.token_urlsafe(50))"
 ## Checks
 
 ```bash
-uv run python manage.py test directory   # 28 tests
+uv run python manage.py test directory accounts --exclude-tag=network  # 98 tests
 uv run ruff check . && uv run ruff format .
 uv run python manage.py check --deploy   # run with DEBUG=false
 ```
+
+These same checks run in GitHub Actions on every push, and again against the
+exact ref you deploy. The `network` tag hides one file,
+`accounts/tests/test_contract.py`, which asks Google's live discovery document
+whether our OAuth constants are still right. It runs on a weekly schedule of
+its own; to run it by hand:
+
+```bash
+uv run python manage.py test accounts.tests.test_contract
+```
+
+## Deploying
+
+There is one environment and one machine, and nothing deploys itself. A push
+to `main` runs the checks and changes nothing on the live site. Shipping is a
+deliberate act: open **Actions → Deploy to production → Run workflow**, give
+it a tag, branch, or commit SHA, and that is what goes out.
+
+The checks run against the ref you named rather than against whatever passed
+CI earlier, so a tag cut from an older commit is tested exactly as it will be
+deployed. Afterwards the workflow polls the site until it answers 200.
+**That smoke test is not decoration** — `fly.toml` deliberately defines no
+health check, so `flyctl deploy` returns once the machine is running, not once
+Django is answering. Without the poll, a container that boots and immediately
+crashes still reports a green deploy.
+
+The only thing GitHub needs is one repository secret:
+
+| Secret | How to get it |
+|---|---|
+| `FLY_API_TOKEN` | `fly tokens create deploy -a volusiahd` |
+
+That is the whole list, and the reason it is so short is worth knowing.
+`flyctl deploy --remote-only` builds the image on Fly's builders and tells Fly
+to run it; Fly injects the app's own secrets at boot. So `SECRET_KEY`, the
+`B2_*` Litestream credentials, the Tigris `AWS_*` values, and the Google OAuth
+client stay in `fly secrets` and must **not** be copied into GitHub. Anything
+duplicated there is a second place to rotate and a second place to leak.
+
+A deploy token is scoped to the one app: it cannot reach anything else in the
+Fly organization. Add `-x 8760h` if you want it to expire in a year.
+
+The workflows are three files plus one they share:
+
+```
+.github/workflows/checks.yml     lint, tests, production config check
+.github/workflows/ci.yml         runs the checks on every push
+.github/workflows/deploy.yml     manual, takes a ref, deploys and smoke-tests
+.github/workflows/google-contract.yml   weekly: asks Google if we still match
+```
+
+`checks.yml` exists as its own callable workflow so CI and deploy cannot run
+different checks. Duplicating those steps would eventually mean deploying
+something that was never really tested.
 
 ## Layout
 
@@ -44,6 +98,7 @@ uv run python manage.py check --deploy   # run with DEBUG=false
 manage.py                 puts src/ on the path, then defers to Django
 src/volusiahd/            project package: settings, urls, wsgi, unfold config
 src/directory/            the single app — models, admin, views, tests
+src/accounts/             Google sign-in for the admin; no other app imports it
 src/templates/            public templates; base.html carries the Open Graph tags
 src/static/css/site.css   hand-written, no build step
 Dockerfile, fly.toml      the production image and its Fly.io configuration
@@ -55,6 +110,13 @@ one card with four things on it — Programs, Categories, Pages, Submissions —
 rather than hunting across sections.
 
 ## Things worth knowing before you change something
+
+**A Google account is not an admin account.** The admin login page offers
+"Sign in with Google", but nothing in `src/accounts/` creates a `User` — the
+row has to already exist, be active, and be staff, or the sign-in is refused
+and logged. Adding someone is a superuser opening **Access → People** in the
+admin. The credentials, the setup steps, and the reasoning behind skipping the
+JWT signature check are in [docs/admin-access.md](docs/admin-access.md).
 
 **Rich text is sanitized on save, not on form validation.** `ProseEditorField`
 only cleans during `full_clean()`, which covers the admin but not a spreadsheet

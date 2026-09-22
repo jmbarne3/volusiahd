@@ -62,6 +62,20 @@ UNFOLD = {
                     },
                 ],
             },
+            {
+                # Who may sign in. Superusers only: an editor has no business
+                # here, and the admin itself refuses them if they arrive.
+                "title": _("Access"),
+                "separator": True,
+                "items": [
+                    {
+                        "title": _("People"),
+                        "icon": "manage_accounts",
+                        "link": reverse_lazy("admin:auth_user_changelist"),
+                        "permission": "accounts.navigation.is_superuser",
+                    },
+                ],
+            },
         ],
     },
 }

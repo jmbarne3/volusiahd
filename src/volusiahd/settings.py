@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     "django.contrib.sitemaps",
     "django.contrib.staticfiles",
     "django_prose_editor",
+    "accounts",
     "directory",
 ]
 
@@ -64,6 +65,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "directory.context_processors.site",
+                "accounts.context_processors.google_sign_in",
             ],
         },
     },
@@ -132,6 +134,15 @@ if bucket := env("BUCKET_NAME", default=""):
     }
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# --- Signing in to the admin with Google ------------------------------------
+# Credentials come from a Google Cloud "Web application" OAuth client whose
+# authorized redirect URI is SITE_BASE_URL + /admin/google/callback/. Leave
+# them empty and the Google button simply does not appear. Accounts are never
+# created by signing in; see src/accounts/views.py and docs/admin-access.md.
+
+GOOGLE_OAUTH_CLIENT_ID = env("GOOGLE_OAUTH_CLIENT_ID", default="")
+GOOGLE_OAUTH_CLIENT_SECRET = env("GOOGLE_OAUTH_CLIENT_SECRET", default="")
 
 # --- Site identity, used in templates and Open Graph tags -------------------
 

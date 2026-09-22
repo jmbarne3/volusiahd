@@ -1,0 +1,95 @@
+# Deploys to production, by hand, from the Actions tab.
+#
+# There is one environment and one machine. Nothing deploys itself: a push to
+# main changes nothing on the live site until somebody runs this workflow and
+# names what to ship. The checks run against that exact ref rather than
+# against whatever passed CI earlier, so a tag cut from an older commit is
+# tested as it will be deployed.
+name: Deploy to production
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Tag, branch, or commit SHA to deploy
+        type: string
+        required: true
+        default: main
+
+# One deploy at a time. The app is a single machine with a SQLite database on
+# a volume; two overlapping deploys have nowhere good to go.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    uses: ./.github/workflows/checks.yml
+    with:
+      ref: ${{ inputs.ref }}
+
+  deploy:
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Add required reviewers to this environment in repository settings if you
+    # ever want a second pair of eyes before a deploy. It works without any.
+    environment:
+      name: production
+      url: https://volusiahd.org
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Record what is being deployed
+        # The ref arrives through the environment rather than being
+        # interpolated into the script. A `${{ }}` expression is pasted into
+        # the shell verbatim before it runs, so a ref containing shell
+        # metacharacters would execute here.
+        env:
+          REQUESTED_REF: ${{ inputs.ref }}
+        run: |
+          {
+            echo "### Deploying to https://volusiahd.org"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Requested ref | \`$REQUESTED_REF\` |"
+            echo "| Commit | \`$(git rev-parse HEAD)\` |"
+            echo "| Subject | $(git log -1 --pretty=%s) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Fly publishes no tagged releases of this action, hence @master. The
+      # flyctl version is pinned here instead, in the same spirit as the
+      # Dockerfile: bump it deliberately, not by surprise on a Tuesday.
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        with:
+          version: 0.4.105
+
+      - name: Deploy
+        # --remote-only builds on Fly's builders, so the runner needs no
+        # Docker. --ha=false keeps Fly from ever trying to add a second
+        # machine, which cannot work: one SQLite file on one volume.
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --remote-only --ha=false
+
+      - name: Smoke test
+        # fly.toml deliberately defines no health check, so `flyctl deploy`
+        # returns once the machine is running — not once Django is answering.
+        # Without this step a container that boots and immediately crashes
+        # still reports a green deploy.
+        run: |
+          for attempt in $(seq 1 10); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' https://volusiahd.org/ || true)
+            if [ "$code" = "200" ]; then
+              echo "Site answered 200 on attempt $attempt."
+              exit 0
+            fi
+            echo "Attempt $attempt: got '$code', retrying in 6s."
+            sleep 6
+          done
+          echo "::error::The site did not return 200 within a minute of deploying."
+          echo "Check \`fly logs -a volusiahd\`."
+          exit 1

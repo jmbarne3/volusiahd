@@ -1,0 +1,36 @@
+# Asks Google, once a week, whether our OAuth assumptions still hold.
+#
+# Every other test fakes Google's side of the conversation and will keep
+# passing on the day Google moves an endpoint or drops a claim. This one
+# fetches the live OpenID Connect discovery document and compares it with the
+# constants in src/accounts/google.py. It is kept out of CI because a Google
+# outage should not turn a pull request red.
+#
+# A failure here is not a bug in our code. It means Google moved and
+# accounts/google.py has to follow. See docs/admin-access.md.
+name: Google sign-in contract
+
+on:
+  schedule:
+    # 07:15 UTC on Mondays — early enough to be dealt with before the week.
+    - cron: "15 7 * * 1"
+  workflow_dispatch:
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - run: uv sync --frozen
+
+      - name: Compare our constants against Google's discovery document
+        env:
+          DEBUG: "true"
+          SECRET_KEY: not-a-real-key-only-used-by-the-test-run
+        run: uv run python manage.py test accounts.tests.test_contract -v2

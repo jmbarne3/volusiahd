@@ -1,0 +1,64 @@
+# The checks, in one place, called by both ci.yml and deploy.yml.
+#
+# It lives in its own file rather than being copied into each so the two
+# cannot drift. A deploy that ran a stale version of the test command is a
+# deploy that was not really checked.
+name: Checks
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit, tag, or branch to check. Defaults to the caller's.
+        type: string
+        required: false
+        default: ""
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Test
+        # DEBUG=true on purpose. STORAGES is decided at import time, so with
+        # DEBUG false the static files backend becomes the hashed manifest,
+        # which needs a collectstatic that has not run here — and every admin
+        # page in the suite fails on a missing manifest entry rather than on
+        # anything real. The production storage config is exercised by the
+        # deploy check below and by the Docker build.
+        env:
+          DEBUG: "true"
+          SECRET_KEY: not-a-real-key-only-used-by-the-test-run
+        run: uv run python manage.py test directory accounts --exclude-tag=network
+
+      - name: Production configuration check
+        # The same settings the live site runs under, so a security setting
+        # lost in a refactor fails here rather than after a deploy.
+        env:
+          DEBUG: "false"
+          ALLOWED_HOSTS: volusiahd.org,www.volusiahd.org,volusiahd.fly.dev
+          CSRF_TRUSTED_ORIGINS: https://volusiahd.org
+          SITE_BASE_URL: https://volusiahd.org
+        run: |
+          # A throwaway key of realistic length. A short one trips
+          # security.W009 on its own, and at --fail-level WARNING that would
+          # mask every finding this step exists to catch.
+          export SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(50))")
+          uv run python manage.py collectstatic --noinput
+          uv run python manage.py check --deploy --fail-level WARNING

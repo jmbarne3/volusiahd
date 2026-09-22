@@ -1,0 +1,18 @@
+# Runs the checks on every push and pull request. Deploying is a separate,
+# deliberate act; see deploy.yml.
+name: CI
+
+# Push only, on every branch. Adding pull_request as well would run the same
+# checks twice on any branch that has a PR open; a required status check
+# matches on the commit, so push-triggered runs satisfy branch protection.
+on:
+  push:
+    branches: ["**"]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    uses: ./.github/workflows/checks.yml
