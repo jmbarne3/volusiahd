@@ -1,5 +1,39 @@
 # Litestream 0.5 format. B2 credentials use B2_* names so they cannot collide
 # with the AWS_* variables `fly storage create` sets for Tigris.
+#
+# --- Why the intervals below are not the defaults ---------------------------
+# Litestream's housekeeping loops each begin with a ListObjectsV2, which B2
+# bills as a Class C transaction. The free allowance is 2,500 a day. Out of
+# the box Litestream runs L0 retention every 15 seconds and level-1 compaction
+# every 30 seconds — 5,760 plus 2,880 listings a day between them, so an idle
+# site exhausts the day's cap by mid-afternoon. It did, on 22 September 2026.
+#
+# The settings here cut that to roughly 200 sweeps a day. Nothing about
+# durability changes: the actual replication is `sync-interval`, which is one
+# second and writes with PUT, a Class A transaction that B2 does not charge
+# for. Compaction and retention are tidying, not backup.
+#
+# Two things to know before editing. These keys are TOP LEVEL — put them under
+# `dbs:` and they are silently ignored rather than rejected, which is an easy
+# hour to lose. And l0-retention must stay comfortably longer than the level-1
+# compaction interval, so the retention sweep cannot discard L0 files before
+# compaction has folded them into level 1.
+#
+# Verify a change by reading Litestream's own startup lines, which print every
+# interval it is actually using:
+#   fly logs -a volusiahd | grep -E "retention monitor|compaction monitor"
+
+l0-retention: 1h
+l0-retention-check-interval: 1h
+
+levels:
+  - level: 1
+    interval: 10m
+  - level: 2
+    interval: 1h
+  - level: 3
+    interval: 6h
+
 dbs:
   - path: /data/db.sqlite3
     replica:
