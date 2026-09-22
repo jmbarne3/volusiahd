@@ -1,0 +1,32 @@
+# Fly.io configuration. Secrets (SECRET_KEY, B2_*, and the Tigris AWS_* and
+# BUCKET_NAME values) are set with `fly secrets` and never belong here.
+# See docs/hosting-setup.md.
+
+app = "volusiahd"
+primary_region = "iad"
+
+[env]
+  DEBUG = "false"
+  DATABASE_PATH = "/data/db.sqlite3"
+  ALLOWED_HOSTS = "volusiahd.org,www.volusiahd.org,volusiahd.fly.dev"
+  CSRF_TRUSTED_ORIGINS = "https://volusiahd.org,https://www.volusiahd.org,https://volusiahd.fly.dev"
+  SITE_BASE_URL = "https://volusiahd.org"
+
+[mounts]
+  source = "hsd_data"
+  destination = "/data"
+  snapshot_retention = 14
+
+# One machine, always on. SQLite on a volume means exactly one machine; deploy
+# the first time with `fly deploy --ha=false`. No health check on "/": Fly's
+# checker omits our Host header and HTTPS, so Django would answer 400 or 301.
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

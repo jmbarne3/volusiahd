@@ -46,7 +46,9 @@ src/volusiahd/            project package: settings, urls, wsgi, unfold config
 src/directory/            the single app — models, admin, views, tests
 src/templates/            public templates; base.html carries the Open Graph tags
 src/static/css/site.css   hand-written, no build step
-docs/                     the development and hosting plan
+docs/                     the development plan and hosting guides
+Dockerfile, fly.toml      the production image and its Fly.io configuration
+deploy/                   Litestream config and the container's start scripts
 ```
 
 One app, not four. The admin groups by app, and the content manager should see
@@ -106,6 +108,7 @@ styled admin, the public list and detail pages, search, category filtering,
 flat pages, provider registration and referral with a shared moderation queue,
 sitemap, robots, and Open Graph tags.
 
-Phase 2 (the Hetzner server, Caddy, Gunicorn, Litestream, and `provision.sh`) is
-next and has not been started. Phase 0, the twenty-program content inventory,
+Phase 2 moved from a Hetzner server to Fly.io. The image, `fly.toml`, and
+Litestream setup are in the repository and build locally; the first real deploy
+is next, following `docs/hosting-setup.md`. Phase 0, the twenty-program content inventory,
 runs in parallel and is not a code task.

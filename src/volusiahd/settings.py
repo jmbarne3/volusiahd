@@ -1,8 +1,9 @@
 """Settings for the Volusia County Homeschool Directory.
 
 Configuration comes from the environment via django-environ. In development a
-`.env` file at the repository root is read automatically; in production the same
-file lives at /srv/hsd/.env, owned by `deploy` with mode 600.
+`.env` file at the repository root is read automatically; on Fly the values come
+from `fly.toml` [env] and `fly secrets`, and .dockerignore keeps .env out of the
+image. See docs/hosting-setup.md.
 """
 
 from pathlib import Path
@@ -115,6 +116,21 @@ STORAGES = {
     },
 }
 
+# Uploaded logos go to object storage when a bucket is configured (Tigris on
+# Fly, which sets these variables) and to MEDIA_ROOT otherwise.
+if bucket := env("BUCKET_NAME", default=""):
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "bucket_name": bucket,
+            "endpoint_url": env("AWS_ENDPOINT_URL_S3"),
+            "region_name": "auto",
+            "custom_domain": f"{bucket}.t3.tigrisfiles.io",
+            "querystring_auth": False,
+            "file_overwrite": False,
+        },
+    }
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # --- Site identity, used in templates and Open Graph tags -------------------
@@ -123,7 +139,7 @@ SITE_NAME = env("SITE_NAME", default="Volusia County Homeschool Directory")
 SITE_BASE_URL = env("SITE_BASE_URL", default="http://localhost:8000")
 
 # --- Security ---------------------------------------------------------------
-# Caddy terminates TLS and proxies over a Unix socket.
+# Fly's proxy terminates TLS and sets X-Forwarded-Proto.
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 X_FRAME_OPTIONS = "DENY"

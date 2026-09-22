@@ -1,0 +1,12 @@
+# Litestream 0.5 format. B2 credentials use B2_* names so they cannot collide
+# with the AWS_* variables `fly storage create` sets for Tigris.
+dbs:
+  - path: /data/db.sqlite3
+    replica:
+      type: s3
+      bucket: ${B2_BUCKET}
+      path: db
+      endpoint: ${B2_ENDPOINT}
+      region: ${B2_REGION}
+      access-key-id: ${B2_KEY_ID}
+      secret-access-key: ${B2_APP_KEY}
