@@ -146,7 +146,7 @@ GOOGLE_OAUTH_CLIENT_SECRET = env("GOOGLE_OAUTH_CLIENT_SECRET", default="")
 
 # --- Site identity, used in templates and Open Graph tags -------------------
 
-SITE_NAME = env("SITE_NAME", default="Volusia County Homeschool Directory")
+SITE_NAME = env("SITE_NAME", default="Volusia Homeschool Directory")
 SITE_BASE_URL = env("SITE_BASE_URL", default="http://localhost:8000")
 
 # --- Security ---------------------------------------------------------------

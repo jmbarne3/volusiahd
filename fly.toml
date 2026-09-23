@@ -11,6 +11,7 @@ primary_region = "iad"
   ALLOWED_HOSTS = "volusiahd.org,www.volusiahd.org,volusiahd.fly.dev"
   CSRF_TRUSTED_ORIGINS = "https://volusiahd.org,https://www.volusiahd.org,https://volusiahd.fly.dev"
   SITE_BASE_URL = "https://volusiahd.org"
+  SITE_NAME = "Volusia Homeschool Directory"
 
 [mounts]
   source = "hsd_data"
