@@ -217,7 +217,13 @@ class Program(SanitizedRichTextMixin, models.Model):
 
 
 class ContactPerson(models.Model):
-    """Edited inline on the program, never navigated to separately."""
+    """Who to call about this program. Never published.
+
+    Edited inline on the program, never navigated to separately, and rendered
+    by no public template. Families reach a program through its website,
+    Facebook page, email or phone; this is the roster of people we talk to
+    when a listing needs checking.
+    """
 
     program = models.ForeignKey(Program, related_name="contacts", on_delete=models.CASCADE)
     name = models.CharField(max_length=120)
@@ -228,11 +234,6 @@ class ContactPerson(models.Model):
     )
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=32, blank=True)
-    is_public = models.BooleanField(
-        default=False,
-        help_text="Untick to keep this person's details for our records only. "
-        "Only ticked contacts appear on the public site.",
-    )
 
     class Meta:
         ordering = ["name"]
@@ -279,8 +280,12 @@ class Submission(models.Model):
     """A record waiting on approval, from one of two doors.
 
     A **registration** is a provider describing their own program. It mirrors
-    every field on `Program`, because the whole point is that approving it is
-    the only action left — nobody retypes anything.
+    every published field on `Program`, because the whole point is that
+    approving it is the only action left — nobody retypes anything.
+
+    What it deliberately does not collect is a named person to publish.
+    Families reach a program through its website, Facebook page, email or
+    phone; the people behind it are our records, not the directory's content.
 
     A **referral** is someone pointing us at a program they do not run. It is
     deliberately thin: a name and a way to reach them, so we can invite the
@@ -337,17 +342,6 @@ class Submission(models.Model):
         upload_to="submissions/logos/",
         blank=True,
         validators=[validate_logo_size],
-    )
-
-    # --- The contact to publish alongside the program ----------------------
-
-    contact_name = models.CharField(max_length=120, blank=True)
-    contact_role = models.CharField(max_length=80, blank=True)
-    contact_email = models.EmailField(blank=True)
-    contact_phone = models.CharField(max_length=32, blank=True)
-    contact_is_public = models.BooleanField(
-        default=True,
-        help_text="Whether this contact's details may appear on the public page.",
     )
 
     # --- Who sent it, and our handling of it -------------------------------

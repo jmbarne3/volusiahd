@@ -72,11 +72,6 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "cost_notes",
             "meeting_schedule",
             "logo",
-            "contact_name",
-            "contact_role",
-            "contact_email",
-            "contact_phone",
-            "contact_is_public",
             "submitter_name",
             "submitter_email",
             "submitter_role",
@@ -97,11 +92,6 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "cost_notes": "Cost",
             "meeting_schedule": "When you meet",
             "logo": "Logo",
-            "contact_name": "Contact name",
-            "contact_role": "Their role",
-            "contact_email": "Contact email",
-            "contact_phone": "Contact phone",
-            "contact_is_public": "Show this contact on our public page",
             "submitter_name": "Your name",
             "submitter_email": "Your email",
             "submitter_role": "Your role at the program",
@@ -121,7 +111,6 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "cost_notes": "e.g. '$45/semester per family, plus a $20 materials fee'.",
             "meeting_schedule": "e.g. 'Tuesdays 9am–noon, September through May'.",
             "logo": "Optional. PNG or JPEG, up to 2 MB.",
-            "contact_is_public": "Untick and we will keep these details for our records only.",
             "submitter_email": "So we can ask you a question if something is unclear. "
             "It is never published.",
         }
@@ -151,7 +140,7 @@ class ProgramRegistrationForm(BaseSubmissionForm):
         age_min, age_max = cleaned.get("age_min"), cleaned.get("age_max")
         if age_min and age_max and age_min > age_max:
             self.add_error("age_max", "The oldest age cannot be younger than the youngest age.")
-        reachable = ["website", "facebook", "email", "phone", "contact_email"]
+        reachable = ["website", "facebook", "email", "phone"]
         if not any(cleaned.get(f) for f in reachable):
             raise forms.ValidationError(
                 "Please give at least one way for families to reach you — "

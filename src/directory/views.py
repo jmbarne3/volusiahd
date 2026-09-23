@@ -66,14 +66,9 @@ def category_detail(request, slug):
 
 def program_detail(request, slug):
     program = get_object_or_404(_published_programs(), slug=slug)
-    return render(
-        request,
-        "directory/program_detail.html",
-        {
-            "program": program,
-            "contacts": program.contacts.filter(is_public=True),
-        },
-    )
+    # No `contacts` here on purpose: the people behind a program are our
+    # records, not the directory's content.
+    return render(request, "directory/program_detail.html", {"program": program})
 
 
 def page_detail(request, slug):

@@ -92,16 +92,20 @@ class PublicSiteTests(TestCase):
         self.assertContains(response, 'aria-label="Facebook page for Sample Co-op"')
         self.assertContains(response, "<svg")
 
-    def test_private_contacts_stay_private(self):
+    def test_contacts_never_reach_the_public_page(self):
+        """There is no flag that publishes a contact, and there should not be.
+
+        This is the test that has to fail if someone later adds `contacts` back
+        into the view context or the template, because the people on this list
+        gave us their details for our use, not for the directory.
+        """
         ContactPerson.objects.create(
-            program=self.program, name="Public Pat", email="pat@example.org", is_public=True
-        )
-        ContactPerson.objects.create(
-            program=self.program, name="Private Pat", email="private@example.org", is_public=False
+            program=self.program, name="Dana Reed", email="dana@example.org", phone="386-555-0101"
         )
         response = self.client.get(reverse("directory:program", kwargs={"slug": self.program.slug}))
-        self.assertContains(response, "Public Pat")
-        self.assertNotContains(response, "Private Pat")
+        self.assertNotContains(response, "Dana Reed")
+        self.assertNotContains(response, "dana@example.org")
+        self.assertNotContains(response, "386-555-0101")
 
 
 class SanitizationTests(TestCase):
@@ -168,11 +172,6 @@ class RegistrationTests(TestCase):
             "age_max": "14",
             "cost_notes": "$45 per semester.",
             "meeting_schedule": "Thursdays 9am–noon.",
-            "contact_name": "Dana Reed",
-            "contact_role": "Coordinator",
-            "contact_email": "dana@coastal.example.org",
-            "contact_phone": "386-555-0101",
-            "contact_is_public": "on",
             "submitter_name": "Dana Reed",
             "submitter_email": "dana@coastal.example.org",
             "submitter_role": "Director",
@@ -189,7 +188,6 @@ class RegistrationTests(TestCase):
         self.assertEqual(submission.kind, Submission.Kind.REGISTRATION)
         self.assertEqual(submission.status, Submission.Status.NEW)
         self.assertEqual(submission.serves_grades, "K–8")
-        self.assertEqual(submission.contact_name, "Dana Reed")
         self.assertTrue(submission.is_authorized)
 
     def test_a_program_can_meet_in_more_than_one_place(self):
@@ -224,7 +222,7 @@ class RegistrationTests(TestCase):
     def test_at_least_one_way_to_make_contact_is_required(self):
         response = self.client.post(
             reverse("directory:register"),
-            self._payload(website="", facebook="", email="", phone="", contact_email=""),
+            self._payload(website="", facebook="", email="", phone=""),
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "at least one way for families to reach you")
@@ -239,7 +237,7 @@ class RegistrationTests(TestCase):
         """
         response = self.client.post(
             reverse("directory:register"),
-            self._payload(website="", email="", phone="", contact_email=""),
+            self._payload(website="", email="", phone=""),
         )
         self.assertRedirects(response, reverse("directory:register_thanks"))
         self.assertEqual(Submission.objects.get().facebook, "https://facebook.com/groups/coastal")
@@ -331,10 +329,6 @@ class ApprovalTests(TestCase):
             "age_max": 14,
             "cost_notes": "$45 per semester.",
             "meeting_schedule": "Thursdays 9am–noon.",
-            "contact_name": "Dana Reed",
-            "contact_role": "Coordinator",
-            "contact_email": "dana@coastal.example.org",
-            "contact_is_public": True,
             "submitter_name": "Dana Reed",
             "submitter_email": "dana@coastal.example.org",
             "is_authorized": True,
@@ -385,12 +379,6 @@ class ApprovalTests(TestCase):
         # Plain text became paragraphs.
         self.assertIn("<p>We meet weekly.</p>", program.description)
         self.assertIn("September through May", program.description)
-
-        # The contact became a real inline record.
-        contact = program.contacts.get()
-        self.assertEqual(contact.name, "Dana Reed")
-        self.assertEqual(contact.role, "Coordinator")
-        self.assertTrue(contact.is_public)
 
     def test_an_approved_registration_is_immediately_visible_to_the_public(self):
         submission = self._registration()

@@ -35,10 +35,6 @@
         {% if program.facebook %}<dt>Facebook</dt><dd>{% include "directory/_social_link.html" with network="facebook" url=program.facebook label="Facebook page for "|add:program.name %}</dd>{% endif %}
         {% if program.email %}<dt>Email</dt><dd><a href="mailto:{{ program.email }}">{{ program.email }}</a></dd>{% endif %}
         {% if program.phone %}<dt>Phone</dt><dd>{{ program.phone }}</dd>{% endif %}
-        {% for contact in contacts %}
-          <dt>{{ contact.role|default:"Contact" }}</dt>
-          <dd>{{ contact.name }}{% if contact.email %} — <a href="mailto:{{ contact.email }}">{{ contact.email }}</a>{% endif %}{% if contact.phone %} — {{ contact.phone }}{% endif %}</dd>
-        {% endfor %}
       </dl>
 
       {% if program.last_verified_on %}

@@ -36,9 +36,9 @@ def pending_submission_count(request):
 class ContactPersonInline(TabularInline):
     model = ContactPerson
     extra = 0
-    fields = ["name", "role", "email", "phone", "is_public"]
+    fields = ["name", "role", "email", "phone"]
     verbose_name = "contact"
-    verbose_name_plural = "Contacts for this program"
+    verbose_name_plural = "Who to call about this program (never published)"
 
 
 @admin.register(Program)
@@ -202,11 +202,6 @@ class SubmissionAdmin(ModelAdmin):
         "cost_notes",
         "meeting_schedule",
         "logo_preview",
-        "contact_name",
-        "contact_role",
-        "contact_email",
-        "contact_phone",
-        "contact_is_public",
         "submitter_name",
         "submitter_email",
         "submitter_role",
@@ -242,19 +237,6 @@ class SubmissionAdmin(ModelAdmin):
                     "meeting_schedule",
                     "cost_notes",
                 ]
-            },
-        ),
-        (
-            "Contact to publish",
-            {
-                "fields": [
-                    "contact_name",
-                    "contact_role",
-                    "contact_email",
-                    "contact_phone",
-                    "contact_is_public",
-                ],
-                "classes": ["collapse"],
             },
         ),
         (
@@ -392,17 +374,6 @@ def build_program_from(submission, status):
 
     program.save()
     program.categories.set(submission.categories.all())
-
-    if submission.contact_name:
-        ContactPerson.objects.create(
-            program=program,
-            name=submission.contact_name,
-            role=submission.contact_role,
-            email=submission.contact_email,
-            phone=submission.contact_phone,
-            is_public=submission.contact_is_public,
-        )
-
     return program
 
 
