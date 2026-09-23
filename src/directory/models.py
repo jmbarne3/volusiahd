@@ -145,6 +145,29 @@ class Program(SanitizedRichTextMixin, models.Model):
         help_text="Free text — fee structures never fit a single number. "
         "e.g. '$45/semester per family, plus a $20 materials fee'.",
     )
+
+    # Step Up For Students runs Florida's scholarships through a marketplace
+    # called EMA. A direct pay provider is one the family can pay from their
+    # scholarship account without laying out the money first, which for many
+    # families decides whether a program is affordable at all. The two
+    # scholarships are separate approvals, so a provider can be one and not
+    # the other.
+    step_up_direct_pay = models.BooleanField(
+        "Step Up direct pay provider",
+        default=False,
+        help_text="Tick if families can pay this program directly through "
+        "Step Up For Students' EMA marketplace.",
+    )
+    step_up_pep = models.BooleanField(
+        "direct pay for PEP",
+        default=False,
+        help_text="Personalized Education Program.",
+    )
+    step_up_fes_ua = models.BooleanField(
+        "direct pay for FES-UA",
+        default=False,
+        help_text="Family Empowerment Scholarship for Students with Unique Abilities.",
+    )
     meeting_schedule = models.TextField(
         blank=True,
         help_text="Free text, e.g. 'Tuesdays 9–noon, September through May'.",
@@ -195,6 +218,25 @@ class Program(SanitizedRichTextMixin, models.Model):
         if self.age_max:
             return f"Through age {self.age_max}"
         return ""
+
+    @property
+    def step_up_display(self):
+        """The sentence a program page shows, empty if they are not a provider.
+
+        A provider who is direct pay but has told us nothing about which
+        scholarships still gets the headline, because that alone answers the
+        question most families are asking.
+        """
+        if not self.step_up_direct_pay:
+            return ""
+        scholarships = [
+            name
+            for name, ticked in [("PEP", self.step_up_pep), ("FES-UA", self.step_up_fes_ua)]
+            if ticked
+        ]
+        if not scholarships:
+            return "Step Up direct pay"
+        return f"Step Up direct pay ({', '.join(scholarships)})"
 
     @property
     def location_list(self):
@@ -337,6 +379,10 @@ class Submission(models.Model):
 
     cost_notes = models.TextField(blank=True)
     meeting_schedule = models.TextField(blank=True)
+
+    step_up_direct_pay = models.BooleanField("Step Up direct pay provider", default=False)
+    step_up_pep = models.BooleanField("direct pay for PEP", default=False)
+    step_up_fes_ua = models.BooleanField("direct pay for FES-UA", default=False)
 
     logo = models.ImageField(
         upload_to="submissions/logos/",

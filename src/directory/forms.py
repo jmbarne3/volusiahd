@@ -70,6 +70,9 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "age_min",
             "age_max",
             "cost_notes",
+            "step_up_direct_pay",
+            "step_up_pep",
+            "step_up_fes_ua",
             "meeting_schedule",
             "logo",
             "submitter_name",
@@ -90,6 +93,9 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "age_min": "Youngest age",
             "age_max": "Oldest age",
             "cost_notes": "Cost",
+            "step_up_direct_pay": "We are a Step Up For Students direct pay provider",
+            "step_up_pep": "Direct pay for PEP",
+            "step_up_fes_ua": "Direct pay for FES-UA",
             "meeting_schedule": "When you meet",
             "logo": "Logo",
             "submitter_name": "Your name",
@@ -109,6 +115,11 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "serves_grades": "Free text, e.g. 'K–8' or 'high school only'. "
             "If it varies, say so — 'varies by class' is a useful answer too.",
             "cost_notes": "e.g. '$45/semester per family, plus a $20 materials fee'.",
+            "step_up_direct_pay": "Tick this if families can pay you directly through "
+            "Step Up For Students' EMA marketplace, rather than paying you and claiming "
+            "it back.",
+            "step_up_pep": "Personalized Education Program.",
+            "step_up_fes_ua": "Family Empowerment Scholarship for Students with Unique Abilities.",
             "meeting_schedule": "e.g. 'Tuesdays 9am–noon, September through May'.",
             "logo": "Optional. PNG or JPEG, up to 2 MB.",
             "submitter_email": "So we can ask you a question if something is unclear. "
@@ -137,6 +148,16 @@ class ProgramRegistrationForm(BaseSubmissionForm):
 
     def clean(self):
         cleaned = super().clean()
+
+        # Someone who ticks PEP but not the box above it has answered the
+        # question; rejecting the form over a checkbox they already implied
+        # would lose us a registration for nothing.
+        if cleaned.get("step_up_pep") or cleaned.get("step_up_fes_ua"):
+            cleaned["step_up_direct_pay"] = True
+        elif not cleaned.get("step_up_direct_pay"):
+            cleaned["step_up_pep"] = False
+            cleaned["step_up_fes_ua"] = False
+
         age_min, age_max = cleaned.get("age_min"), cleaned.get("age_max")
         if age_min and age_max and age_min > age_max:
             self.add_error("age_max", "The oldest age cannot be younger than the youngest age.")

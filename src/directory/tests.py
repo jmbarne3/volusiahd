@@ -92,6 +92,41 @@ class PublicSiteTests(TestCase):
         self.assertContains(response, 'aria-label="Facebook page for Sample Co-op"')
         self.assertContains(response, "<svg")
 
+    def test_step_up_direct_pay_reads_as_a_sentence(self):
+        for direct_pay, pep, fes_ua, expected in [
+            (False, False, False, ""),
+            (False, True, True, ""),
+            (True, False, False, "Step Up direct pay"),
+            (True, True, False, "Step Up direct pay (PEP)"),
+            (True, False, True, "Step Up direct pay (FES-UA)"),
+            (True, True, True, "Step Up direct pay (PEP, FES-UA)"),
+        ]:
+            with self.subTest(direct_pay=direct_pay, pep=pep, fes_ua=fes_ua):
+                program = Program(
+                    step_up_direct_pay=direct_pay, step_up_pep=pep, step_up_fes_ua=fes_ua
+                )
+                self.assertEqual(program.step_up_display, expected)
+
+    def test_step_up_status_shows_on_the_listing_card(self):
+        """The listings are where a family decides what to click.
+
+        A program that takes scholarship money directly is the one they can
+        afford, so that has to be visible before they open the page.
+        """
+        self.program.step_up_direct_pay = True
+        self.program.step_up_pep = True
+        self.program.save(update_fields=["step_up_direct_pay", "step_up_pep"])
+        for url in [reverse("directory:home"), reverse("directory:program_list")]:
+            with self.subTest(url=url):
+                self.assertContains(self.client.get(url), "Step Up direct pay (PEP)")
+
+    def test_step_up_status_shows_on_the_program_page(self):
+        self.program.step_up_direct_pay = True
+        self.program.step_up_fes_ua = True
+        self.program.save(update_fields=["step_up_direct_pay", "step_up_fes_ua"])
+        response = self.client.get(reverse("directory:program", kwargs={"slug": self.program.slug}))
+        self.assertContains(response, "Step Up direct pay (FES-UA)")
+
     def test_contacts_never_reach_the_public_page(self):
         """There is no flag that publishes a contact, and there should not be.
 
@@ -171,6 +206,8 @@ class RegistrationTests(TestCase):
             "age_min": "5",
             "age_max": "14",
             "cost_notes": "$45 per semester.",
+            "step_up_direct_pay": "on",
+            "step_up_pep": "on",
             "meeting_schedule": "Thursdays 9am–noon.",
             "submitter_name": "Dana Reed",
             "submitter_email": "dana@coastal.example.org",
@@ -241,6 +278,27 @@ class RegistrationTests(TestCase):
         )
         self.assertRedirects(response, reverse("directory:register_thanks"))
         self.assertEqual(Submission.objects.get().facebook, "https://facebook.com/groups/coastal")
+
+    def test_a_scholarship_tick_implies_direct_pay(self):
+        """Ticking PEP without the box above it is an answer, not a mistake."""
+        self.client.post(
+            reverse("directory:register"),
+            self._payload(step_up_direct_pay="", step_up_pep="", step_up_fes_ua="on"),
+        )
+        submission = Submission.objects.get()
+        self.assertTrue(submission.step_up_direct_pay)
+        self.assertTrue(submission.step_up_fes_ua)
+        self.assertFalse(submission.step_up_pep)
+
+    def test_scholarships_are_dropped_when_they_are_not_a_direct_pay_provider(self):
+        """Direct pay for a scholarship is meaningless without direct pay."""
+        self.client.post(
+            reverse("directory:register"),
+            self._payload(step_up_direct_pay="", step_up_pep=""),
+        )
+        submission = Submission.objects.get()
+        self.assertFalse(submission.step_up_direct_pay)
+        self.assertFalse(submission.step_up_pep)
 
     def test_age_range_must_make_sense(self):
         response = self.client.post(
@@ -329,6 +387,8 @@ class ApprovalTests(TestCase):
             "age_max": 14,
             "cost_notes": "$45 per semester.",
             "meeting_schedule": "Thursdays 9am–noon.",
+            "step_up_direct_pay": True,
+            "step_up_pep": True,
             "submitter_name": "Dana Reed",
             "submitter_email": "dana@coastal.example.org",
             "is_authorized": True,
@@ -373,6 +433,9 @@ class ApprovalTests(TestCase):
         self.assertEqual(program.age_max, 14)
         self.assertEqual(program.cost_notes, "$45 per semester.")
         self.assertEqual(program.meeting_schedule, "Thursdays 9am–noon.")
+        self.assertTrue(program.step_up_direct_pay)
+        self.assertTrue(program.step_up_pep)
+        self.assertFalse(program.step_up_fes_ua)
         self.assertIn(self.category, program.categories.all())
         self.assertIsNotNone(program.last_verified_on)
 

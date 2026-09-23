@@ -504,6 +504,17 @@ button:hover, form button:hover { background: var(--accent-hover); }
 }
 a.tag:hover { color: var(--ink-strong); }
 
+/* The one chip on a card that is not a category. It borrows the tag's shape
+   but not the accent wash, because the accent means "you can click this" and
+   this is a statement of fact. A ring instead, and no category dot. */
+.tag.step-up {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--edge), inset 0 1px 0 var(--highlight);
+  color: var(--ink);
+  padding-inline: .7rem;
+}
+.tag.step-up::before { display: none; }
+
 .empty { color: var(--muted); }
 
 /* --- Program detail ------------------------------------------------------ */

@@ -48,7 +48,7 @@ class ProgramAdmin(ModelAdmin):
     list_display = ["name", "category_list", "status", "verified_display", "is_featured"]
     list_display_links = ["name"]
     list_editable = ["status", "is_featured"]
-    list_filter = ["status", "categories", "is_featured"]
+    list_filter = ["status", "categories", "is_featured", "step_up_direct_pay"]
     list_per_page = 50
     search_fields = ["name", "short_description", "locations", "contacts__name"]
     filter_horizontal = ["categories"]
@@ -92,6 +92,14 @@ class ProgramAdmin(ModelAdmin):
             "Practical details",
             {
                 "fields": ["cost_notes", "meeting_schedule"],
+            },
+        ),
+        (
+            "Step Up For Students",
+            {
+                "fields": ["step_up_direct_pay", ("step_up_pep", "step_up_fes_ua")],
+                "description": "Whether families can pay this program directly from "
+                "their scholarship account through the EMA marketplace.",
             },
         ),
         (
@@ -201,6 +209,9 @@ class SubmissionAdmin(ModelAdmin):
         "age_max",
         "cost_notes",
         "meeting_schedule",
+        "step_up_direct_pay",
+        "step_up_pep",
+        "step_up_fes_ua",
         "logo_preview",
         "submitter_name",
         "submitter_email",
@@ -236,6 +247,9 @@ class SubmissionAdmin(ModelAdmin):
                     ("age_min", "age_max"),
                     "meeting_schedule",
                     "cost_notes",
+                    "step_up_direct_pay",
+                    "step_up_pep",
+                    "step_up_fes_ua",
                 ]
             },
         ),
@@ -354,6 +368,9 @@ def build_program_from(submission, status):
         age_max=submission.age_max,
         cost_notes=submission.cost_notes,
         meeting_schedule=submission.meeting_schedule,
+        step_up_direct_pay=submission.step_up_direct_pay,
+        step_up_pep=submission.step_up_pep,
+        step_up_fes_ua=submission.step_up_fes_ua,
         status=status,
         # The provider described it today, so today is when it was last verified.
         last_verified_on=timezone.localdate(),
