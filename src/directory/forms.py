@@ -62,6 +62,7 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "description",
             "categories",
             "website",
+            "facebook",
             "email",
             "phone",
             "locations",
@@ -86,6 +87,7 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "short_description": "One-line description",
             "description": "Full description",
             "website": "Website",
+            "facebook": "Facebook page URL",
             "email": "Public email address",
             "phone": "Public phone number",
             "locations": "Where you meet",
@@ -109,6 +111,7 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "before they click to your profile page. One sentence.",
             "description": "Tell families what you do, who it is for, and how to join. "
             "Leave a blank line between paragraphs.",
+            "facebook": "The whole address, starting with https://.",
             "email": "Published on your page. Leave blank if you would rather not.",
             "locations": "One address per line. If you meet in more than one place, "
             "add a line for each. No fixed address? Indicate which city or cities you"
@@ -148,10 +151,11 @@ class ProgramRegistrationForm(BaseSubmissionForm):
         age_min, age_max = cleaned.get("age_min"), cleaned.get("age_max")
         if age_min and age_max and age_min > age_max:
             self.add_error("age_max", "The oldest age cannot be younger than the youngest age.")
-        if not any(cleaned.get(f) for f in ["website", "email", "phone", "contact_email"]):
+        reachable = ["website", "facebook", "email", "phone", "contact_email"]
+        if not any(cleaned.get(f) for f in reachable):
             raise forms.ValidationError(
                 "Please give at least one way for families to reach you — "
-                "a website, an email address, or a phone number."
+                "a website, a Facebook page, an email address, or a phone number."
             )
         return cleaned
 
@@ -172,6 +176,7 @@ class ProgramReferralForm(BaseSubmissionForm):
         fields = [
             "program_name",
             "website",
+            "facebook",
             "email",
             "phone",
             "locations",
@@ -182,7 +187,8 @@ class ProgramReferralForm(BaseSubmissionForm):
         ]
         labels = {
             "program_name": "Program name",
-            "website": "Website, or a Facebook page",
+            "website": "Website",
+            "facebook": "Facebook page URL",
             "email": "Their email, if you know it",
             "phone": "Their phone, if you know it",
             "locations": "Where they meet",

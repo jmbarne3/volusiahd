@@ -116,6 +116,12 @@ class Program(SanitizedRichTextMixin, models.Model):
     categories = models.ManyToManyField(Category, related_name="programs", blank=True)
 
     website = models.URLField(blank=True)
+    facebook = models.URLField(
+        "Facebook page",
+        blank=True,
+        help_text="The full address of their Facebook page or group, "
+        "e.g. 'https://facebook.com/groups/example'.",
+    )
     email = models.EmailField(blank=True, help_text="The program's general contact address.")
     phone = models.CharField(max_length=32, blank=True)
 
@@ -314,6 +320,7 @@ class Submission(models.Model):
     categories = models.ManyToManyField(Category, blank=True)
 
     website = models.URLField(blank=True)
+    facebook = models.URLField("Facebook page", blank=True)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=32, blank=True)
 

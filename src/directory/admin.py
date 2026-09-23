@@ -72,7 +72,7 @@ class ProgramAdmin(ModelAdmin):
         (
             "Contact",
             {
-                "fields": ["website", "email", "phone"],
+                "fields": ["website", "facebook", "email", "phone"],
             },
         ),
         (
@@ -192,6 +192,7 @@ class SubmissionAdmin(ModelAdmin):
         "short_description",
         "description",
         "website",
+        "facebook",
         "email",
         "phone",
         "locations",
@@ -230,7 +231,7 @@ class SubmissionAdmin(ModelAdmin):
         ),
         (
             "How to reach them",
-            {"fields": ["website", "email", "phone", "locations"]},
+            {"fields": ["website", "facebook", "email", "phone", "locations"]},
         ),
         (
             "Who it serves and when",
@@ -362,6 +363,7 @@ def build_program_from(submission, status):
         ),
         description=submission.description_as_html(),
         website=submission.website,
+        facebook=submission.facebook,
         email=submission.email,
         phone=submission.phone,
         locations=submission.locations,

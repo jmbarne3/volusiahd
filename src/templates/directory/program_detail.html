@@ -32,6 +32,7 @@
         {% if program.cost_notes %}<dt>Cost</dt><dd>{{ program.cost_notes|linebreaksbr }}</dd>{% endif %}
         {% if program.location_list %}<dt>Where</dt>{% for location in program.location_list %}<dd>{{ location }}</dd>{% endfor %}{% endif %}
         {% if program.website %}<dt>Website</dt><dd><a href="{{ program.website }}" rel="nofollow noopener">{{ program.website }}</a></dd>{% endif %}
+        {% if program.facebook %}<dt>Facebook</dt><dd>{% include "directory/_social_link.html" with network="facebook" url=program.facebook label="Facebook page for "|add:program.name %}</dd>{% endif %}
         {% if program.email %}<dt>Email</dt><dd><a href="mailto:{{ program.email }}">{{ program.email }}</a></dd>{% endif %}
         {% if program.phone %}<dt>Phone</dt><dd>{{ program.phone }}</dd>{% endif %}
         {% for contact in contacts %}

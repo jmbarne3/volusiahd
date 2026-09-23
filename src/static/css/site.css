@@ -562,6 +562,24 @@ a.tag:hover { color: var(--ink-strong); }
   .facts dd { margin-bottom: var(--s-3); }
 }
 
+/* A brand mark stands in for a link whose URL nobody reads. It inherits
+   `currentColor`, so it follows the theme without a second asset, and it gets
+   a real 44px hit area because these sit in a dense column of facts. */
+.social-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin: -.625rem;
+  border-radius: 50%;
+  color: var(--accent);
+  transition: color .15s ease, background-color .15s ease;
+}
+.social-link:hover { color: var(--accent-hover); background: var(--accent-wash); }
+.social-link svg { width: 1.5rem; height: 1.5rem; display: block; }
+@media (prefers-reduced-motion: reduce) { .social-link { transition: none; } }
+
 .verified { color: var(--muted); font-size: .9rem; margin: 0; }
 
 /* --- Callout and flashes ------------------------------------------------- */

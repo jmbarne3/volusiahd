@@ -83,6 +83,15 @@ class PublicSiteTests(TestCase):
         self.assertContains(response, "101 Woodland Blvd, DeLand 32720")
         self.assertContains(response, "7 Rich Ave, DeLand 32724")
 
+    def test_the_facebook_link_is_a_mark_with_a_name_a_screen_reader_can_read(self):
+        """An icon-only link is invisible to a screen reader without a label."""
+        self.program.facebook = "https://facebook.com/groups/sample"
+        self.program.save(update_fields=["facebook"])
+        response = self.client.get(reverse("directory:program", kwargs={"slug": self.program.slug}))
+        self.assertContains(response, 'href="https://facebook.com/groups/sample"')
+        self.assertContains(response, 'aria-label="Facebook page for Sample Co-op"')
+        self.assertContains(response, "<svg")
+
     def test_private_contacts_stay_private(self):
         ContactPerson.objects.create(
             program=self.program, name="Public Pat", email="pat@example.org", is_public=True
@@ -150,6 +159,7 @@ class RegistrationTests(TestCase):
             "description": "We meet weekly.\n\nClasses run September through May.",
             "categories": [str(self.category.pk)],
             "website": "https://coastal.example.org",
+            "facebook": "https://facebook.com/groups/coastal",
             "email": "hello@coastal.example.org",
             "phone": "386-555-0100",
             "locations": "12 Ocean Ave, Ormond Beach 32176\n4 Granada Blvd, Ormond Beach 32176",
@@ -214,11 +224,25 @@ class RegistrationTests(TestCase):
     def test_at_least_one_way_to_make_contact_is_required(self):
         response = self.client.post(
             reverse("directory:register"),
-            self._payload(website="", email="", phone="", contact_email=""),
+            self._payload(website="", facebook="", email="", phone="", contact_email=""),
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "at least one way for families to reach you")
         self.assertEqual(Submission.objects.count(), 0)
+
+    def test_a_facebook_page_is_enough_to_be_reachable(self):
+        """The reason Facebook is its own field.
+
+        A co-op whose entire presence is a Facebook group has no website, no
+        published email and no phone. Before this field existed they failed the
+        contact check and never made it into the directory at all.
+        """
+        response = self.client.post(
+            reverse("directory:register"),
+            self._payload(website="", email="", phone="", contact_email=""),
+        )
+        self.assertRedirects(response, reverse("directory:register_thanks"))
+        self.assertEqual(Submission.objects.get().facebook, "https://facebook.com/groups/coastal")
 
     def test_age_range_must_make_sense(self):
         response = self.client.post(
@@ -298,6 +322,7 @@ class ApprovalTests(TestCase):
             "short_description": "A Thursday co-op for K–8 families.",
             "description": "We meet weekly.\n\nClasses run September through May.",
             "website": "https://coastal.example.org",
+            "facebook": "https://facebook.com/groups/coastal",
             "email": "hello@coastal.example.org",
             "phone": "386-555-0100",
             "locations": "12 Ocean Ave, Ormond Beach 32176\n4 Granada Blvd, Ormond Beach 32176",
@@ -342,6 +367,7 @@ class ApprovalTests(TestCase):
         self.assertEqual(program.name, "Coastal Co-op")
         self.assertEqual(program.short_description, "A Thursday co-op for K–8 families.")
         self.assertEqual(program.website, "https://coastal.example.org")
+        self.assertEqual(program.facebook, "https://facebook.com/groups/coastal")
         self.assertEqual(program.email, "hello@coastal.example.org")
         self.assertEqual(program.phone, "386-555-0100")
         self.assertEqual(
