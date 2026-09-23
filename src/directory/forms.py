@@ -110,7 +110,7 @@ class ProgramRegistrationForm(BaseSubmissionForm):
         }
         help_texts = {
             "short_description": "This is what people read in the directory listing "
-            "before they click through. One sentence.",
+            "before they click to your profile page. One sentence.",
             "description": "Tell families what you do, who it is for, and how to join. "
             "Leave a blank line between paragraphs.",
             "email": "Published on your page. Leave blank if you would rather not.",
