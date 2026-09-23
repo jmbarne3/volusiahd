@@ -11,13 +11,15 @@ import shutil
 import tempfile
 from io import BytesIO
 
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from PIL import Image
 
 from .models import Category, ContactPerson, Page, Program, Submission
+from .templatetags.directory_extras import CATEGORY_COLOUR_COUNT, colour_code
 
 
 class PublicSiteTests(TestCase):
@@ -141,6 +143,34 @@ class PublicSiteTests(TestCase):
         self.assertNotContains(response, "Dana Reed")
         self.assertNotContains(response, "dana@example.org")
         self.assertNotContains(response, "386-555-0101")
+
+
+class CategoryColourTests(SimpleTestCase):
+    """The colour code lives in Python; the colours live in the stylesheet.
+
+    Nothing connects the two but a class name, so a category added past the
+    end of the ring would render a dot with no hue at all and nobody would
+    notice until it shipped.
+    """
+
+    def test_every_code_has_a_colour_in_the_stylesheet(self):
+        css = (settings.BASE_DIR / "src" / "static" / "css" / "site.css").read_text()
+        for code in range(1, CATEGORY_COLOUR_COUNT + 1):
+            with self.subTest(code=code):
+                self.assertRegex(css, rf"\.c{code}\b")
+
+    def test_codes_are_stable_and_wrap_at_the_end_of_the_ring(self):
+        class FakeCategory:
+            def __init__(self, pk):
+                self.pk = pk
+
+        self.assertEqual(colour_code(FakeCategory(1)), 1)
+        self.assertEqual(colour_code(FakeCategory(CATEGORY_COLOUR_COUNT)), CATEGORY_COLOUR_COUNT)
+        self.assertEqual(colour_code(FakeCategory(CATEGORY_COLOUR_COUNT + 1)), 1)
+        # An unsaved category has no pk. It lands on the last code rather than
+        # the first, which is arbitrary but in range — what matters is that it
+        # resolves to a real colour instead of blowing up mid-render.
+        self.assertIn(colour_code(FakeCategory(None)), range(1, CATEGORY_COLOUR_COUNT + 1))
 
 
 class SanitizationTests(TestCase):

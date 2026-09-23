@@ -9,18 +9,26 @@ from django import template
 
 register = template.Library()
 
-# How many colours the category code rotates through. The ring is nine muted
-# hues evenly spaced around the colour circle, anchored on terracotta's own
-# hue; see the --code-* block in site.css. Nine is the current category count,
-# so today every category has its own. Adding a tenth wraps it back to the
-# first, which is the point at which the ring should be regenerated rather
-# than stretched: the hues are already as close together as stays legible.
-CATEGORY_COLOUR_COUNT = 9
+# How many colours the category code rotates through. Thirty: ten muted hues
+# evenly spaced around the colour circle and anchored on terracotta, in three
+# tones. See the --code-* block in site.css, which is where the colours
+# actually live.
+#
+# Ten hues would have been the natural stopping point — below about 30 degrees
+# apart two dots stop being tellable apart — so the extra headroom comes from
+# tone rather than from crowding the circle. Codes run through all ten hues
+# before the tone changes, which means the first ten categories are the most
+# distinct set available and growth degrades gently from there.
+#
+# Thirty-one wraps back to the first. At that point regenerate the ring rather
+# than stretch it further, or give `Category` a colour field and let editors
+# choose.
+CATEGORY_COLOUR_COUNT = 30
 
 
 @register.filter
 def colour_code(category):
-    """Return a stable 1-4 colour code for a category.
+    """Return a stable 1-30 colour code for a category.
 
     Keyed on the primary key so a category keeps its colour everywhere it
     appears and across page loads, rather than depending on its position in
