@@ -196,6 +196,16 @@ class RegistrationTests(TestCase):
             ["12 Ocean Ave, Ormond Beach 32176", "4 Granada Blvd, Ormond Beach 32176"],
         )
 
+    def test_a_meeting_place_is_required(self):
+        response = self.client.post(reverse("directory:register"), self._payload(locations=""))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Submission.objects.count(), 0)
+
+    def test_grades_served_is_required(self):
+        response = self.client.post(reverse("directory:register"), self._payload(serves_grades=""))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Submission.objects.count(), 0)
+
     def test_authorization_is_required(self):
         response = self.client.post(reverse("directory:register"), self._payload(is_authorized=""))
         self.assertEqual(response.status_code, 200)

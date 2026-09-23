@@ -111,11 +111,11 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "Leave a blank line between paragraphs.",
             "email": "Published on your page. Leave blank if you would rather not.",
             "locations": "One address per line. If you meet in more than one place, "
-            "add a line for each.",
+            "add a line for each. No fixed address? Indicate which city or cities you"
+            " meet in if your meeting location varies.",
             "serves_grades": "Free text, e.g. 'K–8' or 'high school only'. "
-            "Leave blank if it varies.",
-            "cost_notes": "In your own words — fee structures never fit a single number. "
-            "e.g. '$45/semester per family, plus a $20 materials fee'.",
+            "If it varies, say so — 'varies by class' is a useful answer too.",
+            "cost_notes": "e.g. '$45/semester per family, plus a $20 materials fee'.",
             "meeting_schedule": "e.g. 'Tuesdays 9am–noon, September through May'.",
             "logo": "Optional. PNG or JPEG, up to 2 MB.",
             "contact_is_public": "Untick and we will keep these details for our records only.",
@@ -133,7 +133,14 @@ class ProgramRegistrationForm(BaseSubmissionForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # A registration that cannot be published on approval defeats the point.
-        for name in ["short_description", "description", "submitter_name", "submitter_email"]:
+        for name in [
+            "short_description",
+            "description",
+            "locations",
+            "serves_grades",
+            "submitter_name",
+            "submitter_email",
+        ]:
             self.fields[name].required = True
 
     def clean(self):
