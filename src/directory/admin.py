@@ -50,7 +50,7 @@ class ProgramAdmin(ModelAdmin):
     list_editable = ["status", "is_featured"]
     list_filter = ["status", "categories", "is_featured"]
     list_per_page = 50
-    search_fields = ["name", "short_description", "city", "contacts__name"]
+    search_fields = ["name", "short_description", "locations", "contacts__name"]
     filter_horizontal = ["categories"]
     date_hierarchy = "created_at"
     readonly_fields = ["created_at", "updated_at"]
@@ -78,7 +78,7 @@ class ProgramAdmin(ModelAdmin):
         (
             "Location",
             {
-                "fields": ["street", "city", "zip_code"],
+                "fields": ["locations"],
                 "classes": ["collapse"],
             },
         ),
@@ -174,13 +174,13 @@ class SubmissionAdmin(ModelAdmin):
     list_display = [
         "program_name",
         "kind_display",
-        "city",
+        "where_display",
         "status",
         "submitter_name",
         "created_at",
     ]
     list_filter = ["kind", "status", "categories"]
-    search_fields = ["program_name", "submitter_name", "submitter_email", "city"]
+    search_fields = ["program_name", "submitter_name", "submitter_email", "locations"]
     date_hierarchy = "created_at"
     actions = ["approve_and_publish", "create_draft_program", "mark_rejected"]
 
@@ -194,9 +194,7 @@ class SubmissionAdmin(ModelAdmin):
         "website",
         "email",
         "phone",
-        "street",
-        "city",
-        "zip_code",
+        "locations",
         "serves_grades",
         "age_min",
         "age_max",
@@ -232,7 +230,7 @@ class SubmissionAdmin(ModelAdmin):
         ),
         (
             "How to reach them",
-            {"fields": ["website", "email", "phone", "street", "city", "zip_code"]},
+            {"fields": ["website", "email", "phone", "locations"]},
         ),
         (
             "Who it serves and when",
@@ -283,6 +281,15 @@ class SubmissionAdmin(ModelAdmin):
     @display(description="Kind", ordering="kind", label=True)
     def kind_display(self, obj):
         return obj.get_kind_display().split(" — ")[0]
+
+    @display(description="Where")
+    def where_display(self, obj):
+        """One line in a list column, however many addresses they gave us."""
+        lines = [line.strip() for line in (obj.locations or "").splitlines() if line.strip()]
+        if not lines:
+            return "—"
+        first = lines[0] if len(lines[0]) <= 40 else lines[0][:39] + "…"
+        return f"{first} (+{len(lines) - 1} more)" if len(lines) > 1 else first
 
     @display(description="Logo")
     def logo_preview(self, obj):
@@ -357,9 +364,7 @@ def build_program_from(submission, status):
         website=submission.website,
         email=submission.email,
         phone=submission.phone,
-        street=submission.street,
-        city=submission.city,
-        zip_code=submission.zip_code,
+        locations=submission.locations,
         serves_grades=submission.serves_grades,
         age_min=submission.age_min,
         age_max=submission.age_max,

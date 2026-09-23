@@ -30,7 +30,7 @@ class PublicSiteTests(TestCase):
             short_description="A weekly co-op in DeLand.",
             description="<p>Hello</p>",
             status=Program.Status.PUBLISHED,
-            city="DeLand",
+            locations="101 Woodland Blvd, DeLand 32720",
             is_featured=True,
         )
         cls.program.categories.add(cls.category)
@@ -68,13 +68,20 @@ class PublicSiteTests(TestCase):
         response = self.client.get(reverse("directory:program_list"))
         self.assertNotContains(response, "Not Ready")
 
-    def test_search_matches_name_and_city(self):
+    def test_search_matches_name_and_location(self):
         for query in ["Sample", "DeLand"]:
             with self.subTest(query=query):
                 response = self.client.get(reverse("directory:program_list"), {"q": query})
                 self.assertContains(response, "Sample Co-op")
         response = self.client.get(reverse("directory:program_list"), {"q": "nothing-matches"})
         self.assertNotContains(response, "Sample Co-op")
+
+    def test_every_address_shows_on_the_program_page(self):
+        self.program.locations = "101 Woodland Blvd, DeLand 32720\n7 Rich Ave, DeLand 32724"
+        self.program.save(update_fields=["locations"])
+        response = self.client.get(reverse("directory:program", kwargs={"slug": self.program.slug}))
+        self.assertContains(response, "101 Woodland Blvd, DeLand 32720")
+        self.assertContains(response, "7 Rich Ave, DeLand 32724")
 
     def test_private_contacts_stay_private(self):
         ContactPerson.objects.create(
@@ -145,9 +152,7 @@ class RegistrationTests(TestCase):
             "website": "https://coastal.example.org",
             "email": "hello@coastal.example.org",
             "phone": "386-555-0100",
-            "street": "12 Ocean Ave",
-            "city": "Ormond Beach",
-            "zip_code": "32176",
+            "locations": "12 Ocean Ave, Ormond Beach 32176\n4 Granada Blvd, Ormond Beach 32176",
             "serves_grades": "K–8",
             "age_min": "5",
             "age_max": "14",
@@ -176,6 +181,20 @@ class RegistrationTests(TestCase):
         self.assertEqual(submission.serves_grades, "K–8")
         self.assertEqual(submission.contact_name, "Dana Reed")
         self.assertTrue(submission.is_authorized)
+
+    def test_a_program_can_meet_in_more_than_one_place(self):
+        """The reason this field is free text rather than street/city/ZIP.
+
+        Every line the registrant typed has to survive the round trip, because
+        a co-op that meets in two churches has two addresses and no amount of
+        structured address fields will hold the second one.
+        """
+        self.client.post(reverse("directory:register"), self._payload())
+        submission = Submission.objects.get()
+        self.assertEqual(
+            submission.locations.splitlines(),
+            ["12 Ocean Ave, Ormond Beach 32176", "4 Granada Blvd, Ormond Beach 32176"],
+        )
 
     def test_authorization_is_required(self):
         response = self.client.post(reverse("directory:register"), self._payload(is_authorized=""))
@@ -230,7 +249,7 @@ class ReferralTests(TestCase):
             "website": "https://surf.example.org",
             "email": "",
             "phone": "",
-            "city": "New Smyrna Beach",
+            "locations": "New Smyrna Beach",
             "description": "I think they take homeschoolers on Wednesdays.",
             "submitter_name": "Jane",
             "submitter_email": "jane@example.com",
@@ -271,9 +290,7 @@ class ApprovalTests(TestCase):
             "website": "https://coastal.example.org",
             "email": "hello@coastal.example.org",
             "phone": "386-555-0100",
-            "street": "12 Ocean Ave",
-            "city": "Ormond Beach",
-            "zip_code": "32176",
+            "locations": "12 Ocean Ave, Ormond Beach 32176\n4 Granada Blvd, Ormond Beach 32176",
             "serves_grades": "K–8",
             "age_min": 5,
             "age_max": 14,
@@ -317,9 +334,10 @@ class ApprovalTests(TestCase):
         self.assertEqual(program.website, "https://coastal.example.org")
         self.assertEqual(program.email, "hello@coastal.example.org")
         self.assertEqual(program.phone, "386-555-0100")
-        self.assertEqual(program.street, "12 Ocean Ave")
-        self.assertEqual(program.city, "Ormond Beach")
-        self.assertEqual(program.zip_code, "32176")
+        self.assertEqual(
+            program.location_list,
+            ["12 Ocean Ave, Ormond Beach 32176", "4 Granada Blvd, Ormond Beach 32176"],
+        )
         self.assertEqual(program.serves_grades, "K–8")
         self.assertEqual(program.age_min, 5)
         self.assertEqual(program.age_max, 14)

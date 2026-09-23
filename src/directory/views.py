@@ -31,7 +31,7 @@ def program_list(request):
             Q(name__icontains=query)
             | Q(short_description__icontains=query)
             | Q(description__icontains=query)
-            | Q(city__icontains=query)
+            | Q(locations__icontains=query)
         )
     active_category = None
     if category_slug:

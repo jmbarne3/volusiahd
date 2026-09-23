@@ -64,9 +64,7 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "website",
             "email",
             "phone",
-            "street",
-            "city",
-            "zip_code",
+            "locations",
             "serves_grades",
             "age_min",
             "age_max",
@@ -90,9 +88,7 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "website": "Website",
             "email": "Public email address",
             "phone": "Public phone number",
-            "street": "Street address",
-            "city": "City",
-            "zip_code": "ZIP code",
+            "locations": "Where you meet",
             "serves_grades": "Grades served",
             "age_min": "Youngest age",
             "age_max": "Oldest age",
@@ -114,6 +110,8 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "description": "Tell families what you do, who it is for, and how to join. "
             "Leave a blank line between paragraphs.",
             "email": "Published on your page. Leave blank if you would rather not.",
+            "locations": "One address per line. If you meet in more than one place, "
+            "add a line for each.",
             "serves_grades": "Free text, e.g. 'K–8' or 'high school only'. "
             "Leave blank if it varies.",
             "cost_notes": "In your own words — fee structures never fit a single number. "
@@ -127,6 +125,7 @@ class ProgramRegistrationForm(BaseSubmissionForm):
         widgets = {
             "short_description": forms.TextInput,
             "description": forms.Textarea(attrs={"rows": 8}),
+            "locations": forms.Textarea(attrs={"rows": 3}),
             "cost_notes": forms.Textarea(attrs={"rows": 3}),
             "meeting_schedule": forms.Textarea(attrs={"rows": 3}),
         }
@@ -168,7 +167,7 @@ class ProgramReferralForm(BaseSubmissionForm):
             "website",
             "email",
             "phone",
-            "city",
+            "locations",
             "categories",
             "description",
             "submitter_name",
@@ -179,16 +178,18 @@ class ProgramReferralForm(BaseSubmissionForm):
             "website": "Website, or a Facebook page",
             "email": "Their email, if you know it",
             "phone": "Their phone, if you know it",
-            "city": "City",
+            "locations": "Where they meet",
             "description": "What do you know about it?",
             "submitter_name": "Your name",
             "submitter_email": "Your email",
         }
         help_texts = {
+            "locations": "A city is plenty. An address if you have one.",
             "description": "Anything helps — what they do, roughly when they meet, who to ask for.",
             "submitter_email": "So we can follow up if we have a question. It is never published.",
         }
         widgets = {
+            "locations": forms.TextInput,
             "description": forms.Textarea(attrs={"rows": 5}),
         }
 

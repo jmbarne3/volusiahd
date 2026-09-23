@@ -6,7 +6,7 @@
       <p>{{ program.short_description }}</p>
       <p class="meta">
         {% for category in program.categories.all %}<span class="tag c{{ category|colour_code }}">{{ category.name }}</span>{% endfor %}
-        {% if program.city %}<span class="where">{{ program.city }}</span>{% endif %}
+        {% if program.primary_location %}<span class="where">{{ program.primary_location|truncatechars:40 }}{% if program.location_list|length > 1 %} +{{ program.location_list|length|add:"-1" }}{% endif %}</span>{% endif %}
       </p>
     </li>
   {% empty %}

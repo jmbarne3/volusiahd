@@ -119,9 +119,12 @@ class Program(SanitizedRichTextMixin, models.Model):
     email = models.EmailField(blank=True, help_text="The program's general contact address.")
     phone = models.CharField(max_length=32, blank=True)
 
-    street = models.CharField(max_length=160, blank=True)
-    city = models.CharField(max_length=80, blank=True)
-    zip_code = models.CharField("ZIP code", max_length=10, blank=True)
+    locations = models.TextField(
+        "where they meet",
+        blank=True,
+        help_text="One address per line. A program that meets in several places gets "
+        "a line for each; a program that moves around can say so in words instead.",
+    )
 
     serves_grades = models.CharField(
         max_length=80,
@@ -186,6 +189,22 @@ class Program(SanitizedRichTextMixin, models.Model):
         if self.age_max:
             return f"Through age {self.age_max}"
         return ""
+
+    @property
+    def location_list(self):
+        """The addresses, one per line, with the blanks dropped.
+
+        A program that meets in three places is the normal case, not the odd
+        one, so every template that shows a location loops over this rather
+        than assembling a single address out of parts.
+        """
+        return [line.strip() for line in (self.locations or "").splitlines() if line.strip()]
+
+    @property
+    def primary_location(self):
+        """The first address, for listings that only have room for one."""
+        locations = self.location_list
+        return locations[0] if locations else ""
 
     def mark_verified(self, on=None):
         self.last_verified_on = on or timezone.localdate()
@@ -298,9 +317,7 @@ class Submission(models.Model):
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=32, blank=True)
 
-    street = models.CharField(max_length=160, blank=True)
-    city = models.CharField(max_length=80, blank=True)
-    zip_code = models.CharField("ZIP code", max_length=10, blank=True)
+    locations = models.TextField("where they meet", blank=True)
 
     serves_grades = models.CharField(max_length=80, blank=True)
     age_min = models.PositiveSmallIntegerField(null=True, blank=True)
