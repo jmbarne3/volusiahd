@@ -152,33 +152,69 @@ class ProgramAdmin(ModelAdmin):
 
 @admin.register(Category)
 class CategoryAdmin(ModelAdmin):
+    """Also where the tag vocabulary gets divided up.
+
+    Picking a heading's tags is done here and not on the tag screen, because it
+    is a list you curate in one sitting — read down the vocabulary once and
+    decide what belongs under Co-ops — rather than a hundred separate decisions
+    made one tag at a time.
+    """
+
     prepopulated_fields = {"slug": ["name"]}
-    list_display = ["name", "program_count", "sort_order"]
+    list_display = ["name", "program_count", "tag_count", "sort_order"]
     list_editable = ["sort_order"]
     search_fields = ["name"]
-    fields = ["name", "slug", "description", "icon", "sort_order"]
+    # Two panes and a search box, rather than autocomplete: choosing a heading's
+    # tags means reading the whole list and deciding, so the whole list should be
+    # on screen.
+    filter_horizontal = ["tags"]
+    fields = ["name", "slug", "description", "icon", "sort_order", "tags"]
 
     def get_queryset(self, request):
-        return super().get_queryset(request).annotate(_program_count=Count("programs"))
+        return (
+            super()
+            .get_queryset(request)
+            .annotate(_program_count=Count("programs", distinct=True))
+            .annotate(_tag_count=Count("tags", distinct=True))
+        )
 
     @display(description="Programs", ordering="_program_count")
     def program_count(self, obj):
         return obj._program_count
 
+    @display(description="Tags offered", ordering="_tag_count")
+    def tag_count(self, obj):
+        return obj._tag_count
+
 
 @admin.register(Tag)
 class TagAdmin(ModelAdmin):
     """Deliberately plain. The work here is vocabulary discipline, not features:
-    one tag per idea, and no near-duplicates."""
+    one tag per idea, and no near-duplicates.
+
+    "Offered under" is shown but not edited here — see `CategoryAdmin`. A tag
+    with nothing in that column still works; it is simply one we apply
+    ourselves rather than one a registrant can pick.
+    """
 
     prepopulated_fields = {"slug": ["name"]}
-    list_display = ["name", "program_count", "slug"]
+    list_display = ["name", "offered_under", "program_count", "slug"]
     list_per_page = 100
     search_fields = ["name"]
+    list_filter = ["categories"]
     fields = ["name", "slug", "description"]
 
     def get_queryset(self, request):
-        return super().get_queryset(request).annotate(_program_count=Count("programs"))
+        return (
+            super()
+            .get_queryset(request)
+            .prefetch_related("categories")
+            .annotate(_program_count=Count("programs", distinct=True))
+        )
+
+    @display(description="Offered under")
+    def offered_under(self, obj):
+        return ", ".join(category.name for category in obj.categories.all()) or "—"
 
     @display(description="Programs", ordering="_program_count")
     def program_count(self, obj):

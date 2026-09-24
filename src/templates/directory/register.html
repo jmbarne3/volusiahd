@@ -22,19 +22,51 @@ files still resolve.
 <script src="{% static 'admin/js/vendor/jquery/jquery.min.js' %}"></script>
 <script src="{% static 'admin/js/vendor/select2/select2.full.min.js' %}"></script>
 <script>
-  // The field is a working <select multiple> before this runs and after it
-  // fails, so everything here is guarded rather than assumed.
+  // Two jobs: dress the tag field as a Select2, and narrow it to the tags that
+  // go with the chosen heading. The field is a working <select multiple> before
+  // this runs and after any part of it fails, and the server rejects an
+  // out-of-scope tag either way, so nothing here is load-bearing.
   (function () {
     var jq = window.jQuery;
     var select = document.querySelector("select[data-tag-select]");
-    if (!jq || !select || typeof jq.fn.select2 !== "function") return;
-    // `size` only helps the native fallback; Select2 would honour it as a height.
-    select.removeAttribute("size");
-    jq(select).select2({
-      width: "100%",
-      placeholder: select.dataset.placeholder || "",
-      closeOnSelect: false
-    });
+    if (!select) return;
+
+    var enhanced = jq && typeof jq.fn.select2 === "function";
+    if (enhanced) {
+      // `size` only helps the native fallback; Select2 would honour it as a height.
+      select.removeAttribute("size");
+      jq(select).select2({
+        width: "100%",
+        placeholder: select.dataset.placeholder || "",
+        closeOnSelect: false
+      });
+    }
+
+    var category = document.querySelector("select[name='category']");
+    if (!category) return;
+    var hint = document.querySelector("[data-tag-hint]");
+    // Held in JavaScript, not the DOM, because narrowing removes options and
+    // widening has to put them back in their original order.
+    var all = Array.prototype.slice.call(select.options);
+
+    function narrow() {
+      var chosen = category.value;
+      var offered = all.filter(function (option) {
+        var headings = (option.dataset.categories || "").split(" ");
+        return chosen !== "" && headings.indexOf(chosen) !== -1;
+      });
+      // A tag that is no longer on offer cannot stay chosen.
+      all.forEach(function (option) {
+        if (offered.indexOf(option) === -1) option.selected = false;
+      });
+      select.textContent = "";
+      offered.forEach(function (option) { select.appendChild(option); });
+      if (hint) hint.hidden = chosen !== "";
+      if (enhanced) jq(select).trigger("change.select2");
+    }
+
+    category.addEventListener("change", narrow);
+    narrow();
   })();
 </script>
 {% endblock %}
@@ -62,6 +94,7 @@ files still resolve.
   <fieldset>
     <legend>Tags</legend>
     <p class="hint">Optional, and a shorter way for families to find you. Pick as many as genuinely apply — picking everything helps nobody.</p>
+    <p class="hint" data-tag-hint>Choose a heading under “The basics” first. The tags here follow from it.</p>
     {% field form.tags %}
   </fieldset>
 

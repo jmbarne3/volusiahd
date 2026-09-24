@@ -389,13 +389,20 @@ class RegistrationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(Submission.objects.count(), 0)
 
+    def _tag(self, name, slug, *categories):
+        """A tag, offered under the headings given. Under none if given none."""
+        tag = Tag.objects.create(name=name, slug=slug)
+        for category in categories:
+            category.tags.add(tag)
+        return tag
+
     def test_a_registrant_can_only_pick_tags_that_already_exist(self):
         """The whole point of a curated vocabulary.
 
         A submitted value that is not a tag primary key has to be refused, or
         the form becomes free entry by another route.
         """
-        tag = Tag.objects.create(name="Lego", slug="lego")
+        tag = self._tag("Lego", "lego", self.category)
         response = self.client.post(
             reverse("directory:register"), self._payload(tags=[str(tag.pk), "9999"])
         )
@@ -403,19 +410,88 @@ class RegistrationTests(TestCase):
         self.assertEqual(Submission.objects.count(), 0)
 
     def test_chosen_tags_are_stored_on_the_submission(self):
-        tag = Tag.objects.create(name="Lego", slug="lego")
-        Tag.objects.create(name="Unpicked", slug="unpicked")
+        tag = self._tag("Lego", "lego", self.category)
+        self._tag("Unpicked", "unpicked", self.category)
         self.client.post(reverse("directory:register"), self._payload(tags=[str(tag.pk)]))
         self.assertEqual(list(Submission.objects.get().tags.all()), [tag])
 
-    def test_the_tag_field_offers_every_existing_tag_and_no_text_box(self):
-        Tag.objects.create(name="Dual enrollment", slug="dual-enrollment")
+    def test_the_tag_field_is_a_picker_and_not_a_text_box(self):
+        self._tag("Dual enrollment", "dual-enrollment", self.category)
         response = self.client.get(reverse("directory:register"))
         self.assertContains(response, "data-tag-select")
         self.assertContains(response, "Dual enrollment")
         # A <select> the browser validates against, not an input they can type into.
         self.assertContains(response, 'name="tags"')
         self.assertNotContains(response, '<input type="text" name="tags"')
+
+    def test_the_form_only_offers_tags_that_belong_to_a_heading(self):
+        """A tag under no heading is one we apply ourselves.
+
+        Offering it here would be offering a choice that can only ever fail
+        validation, so it is left out of the field entirely.
+        """
+        self._tag("Dual enrollment", "dual-enrollment", self.category)
+        self._tag("Internal only", "internal-only")
+        response = self.client.get(reverse("directory:register"))
+        self.assertContains(response, "Dual enrollment")
+        self.assertNotContains(response, "Internal only")
+
+    def test_each_tag_option_says_which_headings_it_belongs_to(self):
+        """What the page's JavaScript narrows the list with.
+
+        If this attribute stops being rendered the field silently stops
+        narrowing, and the only sign would be a rejected submission.
+        """
+        clubs = Category.objects.create(name="Clubs", slug="clubs")
+        self._tag("Lego", "lego", self.category, clubs)
+        response = self.client.get(reverse("directory:register"))
+        headings = " ".join(str(pk) for pk in sorted([self.category.pk, clubs.pk]))
+        self.assertContains(response, f'data-categories="{headings}"')
+
+    def test_a_tag_that_does_not_go_with_the_chosen_heading_is_refused(self):
+        """The check the JavaScript makes unreachable and a direct post does not."""
+        clubs = Category.objects.create(name="Clubs", slug="clubs")
+        tag = self._tag("Lego", "lego", clubs)
+        response = self.client.post(
+            reverse("directory:register"),
+            self._payload(category=str(self.category.pk), tags=[str(tag.pk)]),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Submission.objects.count(), 0)
+        self.assertContains(response, "We do not use Lego under Co-ops")
+
+    def test_a_tag_can_belong_to_more_than_one_heading(self):
+        clubs = Category.objects.create(name="Clubs", slug="clubs")
+        tag = self._tag("Lego", "lego", self.category, clubs)
+        for category in [self.category, clubs]:
+            with self.subTest(category=category.name):
+                self.client.post(
+                    reverse("directory:register"),
+                    self._payload(category=str(category.pk), tags=[str(tag.pk)]),
+                )
+        self.assertEqual(Submission.objects.count(), 2)
+        for submission in Submission.objects.all():
+            self.assertEqual(list(submission.tags.all()), [tag])
+
+    def test_tags_without_a_heading_to_scope_them_are_refused(self):
+        """Category is optional; picking tags without one is not.
+
+        Tags are scoped by heading, so tags with no heading chosen cannot be
+        checked against anything — the error goes on the category field, which
+        is where the fix is.
+        """
+        tag = self._tag("Lego", "lego", self.category)
+        response = self.client.post(
+            reverse("directory:register"), self._payload(category="", tags=[str(tag.pk)])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Submission.objects.count(), 0)
+        self.assertContains(response, "Please choose a heading")
+
+    def test_a_registration_with_no_category_and_no_tags_is_still_accepted(self):
+        response = self.client.post(reverse("directory:register"), self._payload(category=""))
+        self.assertRedirects(response, reverse("directory:register_thanks"))
+        self.assertIsNone(Submission.objects.get().category)
 
     def test_only_one_category_survives_a_form_that_posts_two(self):
         """The field is a dropdown, but the wire is not.
@@ -723,12 +799,39 @@ class AdminTests(TestCase):
             "/admin/directory/program/",
             "/admin/directory/program/add/",
             "/admin/directory/category/",
+            f"/admin/directory/category/{self.category.pk}/change/",
+            "/admin/directory/tag/",
+            "/admin/directory/tag/add/",
             "/admin/directory/page/",
             "/admin/directory/submission/",
             f"/admin/directory/submission/{submission.pk}/change/",
         ]:
             with self.subTest(url=url):
                 self.assertEqual(self.client.get(url).status_code, 200)
+
+    def test_a_headings_tags_are_chosen_on_the_category_screen(self):
+        """Where the editing happens, and where it deliberately does not.
+
+        The pairing is one list per heading, curated in one sitting, so the
+        category screen owns it and the tag screen only reports it.
+        """
+        tag = Tag.objects.create(name="Lego", slug="lego")
+        self.category.tags.add(tag)
+
+        category_screen = self.client.get(f"/admin/directory/category/{self.category.pk}/change/")
+        self.assertContains(category_screen, 'name="tags"')
+        self.assertContains(category_screen, "Lego")
+
+        tag_screen = self.client.get(f"/admin/directory/tag/{tag.pk}/change/")
+        self.assertEqual(tag_screen.status_code, 200)
+        self.assertNotContains(tag_screen, 'name="categories"')
+
+    def test_the_tag_list_says_which_headings_offer_each_tag(self):
+        tag = Tag.objects.create(name="Lego", slug="lego")
+        self.category.tags.add(tag)
+        response = self.client.get("/admin/directory/tag/")
+        self.assertContains(response, "Offered under")
+        self.assertContains(response, "Co-ops")
 
     def test_groups_are_hidden(self):
         self.assertEqual(self.client.get("/admin/auth/group/").status_code, 404)

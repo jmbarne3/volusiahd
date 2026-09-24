@@ -18,6 +18,26 @@ from .models import Category, Submission, Tag
 HONEYPOT_FIELD = "website_url"
 
 
+class ScopedTagSelect(forms.SelectMultiple):
+    """A <select multiple> whose options say which headings they belong to.
+
+    Which tags go with which heading is `Category.tags`, and the check that
+    matters happens in `clean()` — this widget only writes that pairing into the
+    markup as `data-categories`, so the page's JavaScript can narrow the list
+    the moment someone picks a heading rather than after they submit. Without
+    JavaScript the full list renders and the server does the rejecting.
+    """
+
+    def create_option(self, name, value, *args, **kwargs):
+        option = super().create_option(name, value, *args, **kwargs)
+        tag = getattr(value, "instance", None)
+        if tag is not None:
+            option["attrs"]["data-categories"] = " ".join(
+                str(pk) for pk in sorted(category.pk for category in tag.categories.all())
+            )
+        return option
+
+
 class BaseSubmissionForm(forms.ModelForm):
     """Shared honeypot and category widget.
 
@@ -63,13 +83,19 @@ class ProgramRegistrationForm(BaseSubmissionForm):
     # a tag is that the same idea always carries the same word. The queryset is
     # evaluated per request rather than at import, so a tag added in the admin
     # this morning is on the form this afternoon.
+    #
+    # Only tags that belong to at least one heading are offered at all. The rest
+    # are ours to apply in the admin, and offering one here that no heading
+    # accepts would be a choice that always fails validation.
     tags = forms.ModelMultipleChoiceField(
-        queryset=Tag.objects.all(),
+        queryset=Tag.objects.filter(categories__isnull=False)
+        .distinct()
+        .prefetch_related("categories"),
         required=False,
         # A plain <select multiple>, which Select2 turns into a searchable
         # multiselect on the registration page. Without JavaScript it stays a
         # usable native control rather than nothing at all.
-        widget=forms.SelectMultiple(
+        widget=ScopedTagSelect(
             attrs={
                 "data-tag-select": "",
                 "data-placeholder": "Start typing to find a tag",
@@ -77,8 +103,9 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             }
         ),
         label="Tags",
-        help_text="Tick anything that applies. We keep this list, so if the word you "
-        "want is missing, say so in your description and we will look at adding it.",
+        help_text="These follow from the heading you chose above. We keep this list, "
+        "so if the word you want is missing, say so in your description and we will "
+        "look at adding it.",
     )
 
     class Meta:
@@ -185,6 +212,27 @@ class ProgramRegistrationForm(BaseSubmissionForm):
         elif not cleaned.get("step_up_direct_pay"):
             cleaned["step_up_pep"] = False
             cleaned["step_up_fes_ua"] = False
+
+        # Tags are scoped to the heading, so a tag without a heading has
+        # nothing to be scoped by. Both of these are unreachable with the
+        # JavaScript running — the list narrows as soon as a heading is picked —
+        # and both are reachable by anyone posting the form directly.
+        category, tags = cleaned.get("category"), cleaned.get("tags")
+        if tags:
+            if not category:
+                self.add_error(
+                    "category",
+                    "Please choose a heading. The tags you picked depend on it.",
+                )
+            else:
+                allowed = set(category.tags.values_list("pk", flat=True))
+                stray = [tag.name for tag in tags if tag.pk not in allowed]
+                if stray:
+                    self.add_error(
+                        "tags",
+                        f"We do not use {', '.join(stray)} under {category.name}. "
+                        "Please pick from the list, or tell us in your description.",
+                    )
 
         age_min, age_max = cleaned.get("age_min"), cleaned.get("age_max")
         if age_min and age_max and age_min > age_max:

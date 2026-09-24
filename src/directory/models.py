@@ -72,6 +72,22 @@ class Category(models.Model):
         blank=True,
         help_text="Optional Material Symbols icon name, e.g. 'groups' or 'sports_soccer'.",
     )
+    # Which tags a registrant may pick once they have chosen this heading.
+    #
+    # The relation is declared here rather than on Tag so that the editing
+    # screen follows the model: the question we actually ask is "which tags
+    # belong under Co-ops", which is a question about the heading, not one to
+    # answer a hundred times over on each tag in turn. A tag can sit under
+    # several headings — "Lego" is a class and a club — so this is many to many
+    # and not a parent.
+    tags = models.ManyToManyField(
+        "Tag",
+        related_name="categories",
+        blank=True,
+        help_text="The tags a registrant may choose after picking this heading. "
+        "A tag can appear under more than one heading. A tag under no heading is "
+        "ours to apply here in the admin and is never offered on the public form.",
+    )
 
     class Meta:
         ordering = ["sort_order", "name"]
@@ -94,10 +110,14 @@ class Tag(models.Model):
     rather than browsed: on a program's own page, on a tag page of their own,
     and through the search box.
 
-    Curated here and nowhere else. The public forms do not collect them,
-    because the entire value of a tag is that the same idea always carries the
-    same word, and free entry guarantees the opposite. Suggestions from
-    registrants are a later problem, and a different one.
+    Created here and nowhere else. The registration form lets people pick from
+    the list but never add to it, because the entire value of a tag is that the
+    same idea always carries the same word, and free entry guarantees the
+    opposite. Suggestions from registrants are a later problem, and a different
+    one.
+
+    Which tags a registrant is shown depends on the heading they chose; that
+    pairing lives on `Category.tags`.
     """
 
     name = models.CharField(max_length=60, unique=True)
