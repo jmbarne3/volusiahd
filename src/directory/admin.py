@@ -17,7 +17,7 @@ from django.utils.text import slugify
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.decorators import action, display
 
-from .models import Category, ContactPerson, Page, Program, Submission
+from .models import Category, ContactPerson, Page, Program, Submission, Tag
 
 # She will never touch Groups. Site-wide permissions are not a thing we use.
 admin.site.unregister(Group)
@@ -50,8 +50,11 @@ class ProgramAdmin(ModelAdmin):
     list_editable = ["status", "is_featured"]
     list_filter = ["status", "categories", "is_featured", "step_up_direct_pay"]
     list_per_page = 50
-    search_fields = ["name", "short_description", "locations", "contacts__name"]
+    search_fields = ["name", "short_description", "locations", "tags__name", "contacts__name"]
     filter_horizontal = ["categories"]
+    # Categories are a short list to tick; tags are not. There will be hundreds,
+    # so they get a search box rather than a wall of checkboxes.
+    autocomplete_fields = ["tags"]
     date_hierarchy = "created_at"
     readonly_fields = ["created_at", "updated_at"]
     actions = ["mark_verified_today", "publish_selected"]
@@ -60,7 +63,7 @@ class ProgramAdmin(ModelAdmin):
         (
             None,
             {
-                "fields": ["name", "slug", "status", "is_featured", "categories"],
+                "fields": ["name", "slug", "status", "is_featured", "categories", "tags"],
             },
         ),
         (
@@ -113,6 +116,12 @@ class ProgramAdmin(ModelAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request).prefetch_related("categories")
 
+    def get_search_results(self, request, queryset, search_term):
+        # Searching a joined m2m duplicates rows. Without this, one program
+        # carrying three matching tags shows up three times in the changelist.
+        queryset, _ = super().get_search_results(request, queryset, search_term)
+        return queryset.distinct(), False
+
     @display(description="Categories")
     def category_list(self, obj):
         return ", ".join(c.name for c in obj.categories.all()) or "—"
@@ -153,6 +162,25 @@ class CategoryAdmin(ModelAdmin):
     list_editable = ["sort_order"]
     search_fields = ["name"]
     fields = ["name", "slug", "description", "icon", "sort_order"]
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).annotate(_program_count=Count("programs"))
+
+    @display(description="Programs", ordering="_program_count")
+    def program_count(self, obj):
+        return obj._program_count
+
+
+@admin.register(Tag)
+class TagAdmin(ModelAdmin):
+    """Deliberately plain. The work here is vocabulary discipline, not features:
+    one tag per idea, and no near-duplicates."""
+
+    prepopulated_fields = {"slug": ["name"]}
+    list_display = ["name", "program_count", "slug"]
+    list_per_page = 100
+    search_fields = ["name"]
+    fields = ["name", "slug", "description"]
 
     def get_queryset(self, request):
         return super().get_queryset(request).annotate(_program_count=Count("programs"))

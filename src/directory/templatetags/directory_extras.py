@@ -9,26 +9,25 @@ from django import template
 
 register = template.Library()
 
-# How many colours the category code rotates through. Thirty: ten muted hues
-# evenly spaced around the colour circle and anchored on terracotta, in three
-# tones. See the --code-* block in site.css, which is where the colours
-# actually live.
+# How many colours the category code rotates through. Nine — one per category,
+# and the taxonomy is collapsing to fewer than ten, so there is deliberately no
+# headroom here. The colours themselves live in the --code-* block in site.css.
 #
-# Ten hues would have been the natural stopping point — below about 30 degrees
-# apart two dots stop being tellable apart — so the extra headroom comes from
-# tone rather than from crowding the circle. Codes run through all ten hues
-# before the tone changes, which means the first ten categories are the most
-# distinct set available and growth degrades gently from there.
+# This used to be thirty, which bought room to grow at the cost of hues twelve
+# degrees apart that nobody could tell apart. Fewer categories means the budget
+# can go into distinctness instead: nine hues forty degrees apart, each with its
+# own lightness and chroma.
 #
-# Thirty-one wraps back to the first. At that point regenerate the ring rather
-# than stretch it further, or give `Category` a colour field and let editors
-# choose.
-CATEGORY_COLOUR_COUNT = 30
+# A tenth category wraps back to the first and two categories share a colour.
+# If the taxonomy ever grows past nine, the fix is a colour field on `Category`
+# rather than a wider ring — at that point the colours are editorial, not
+# generated. Tags have no colour at all, by design.
+CATEGORY_COLOUR_COUNT = 9
 
 
 @register.filter
 def colour_code(category):
-    """Return a stable 1-30 colour code for a category.
+    """Return a stable 1-9 colour code for a category.
 
     Keyed on the primary key so a category keeps its colour everywhere it
     appears and across page loads, rather than depending on its position in

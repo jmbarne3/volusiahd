@@ -2,11 +2,21 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import ProgramReferralForm, ProgramRegistrationForm
-from .models import Category, Page, Program
+from .models import Category, Page, Program, Tag
 
 
 def _published_programs():
     return Program.objects.published().prefetch_related("categories")
+
+
+def _listing_context(programs, **extra):
+    """Shared context for every page that renders the program listing."""
+    return {
+        "programs": programs.distinct(),
+        "categories": Category.objects.all(),
+        "query": "",
+        **extra,
+    }
 
 
 def home(request):
@@ -32,6 +42,9 @@ def program_list(request):
             | Q(short_description__icontains=query)
             | Q(description__icontains=query)
             | Q(locations__icontains=query)
+            # Tags are not listed anywhere, so the search box is the main way
+            # anyone reaches one. Typing "Lego" has to find the Lego programs.
+            | Q(tags__name__icontains=query)
         )
     active_category = None
     if category_slug:
@@ -41,12 +54,7 @@ def program_list(request):
     return render(
         request,
         "directory/program_list.html",
-        {
-            "programs": programs.distinct(),
-            "categories": Category.objects.all(),
-            "query": query,
-            "active_category": active_category,
-        },
+        _listing_context(programs, query=query, active_category=active_category),
     )
 
 
@@ -55,12 +63,20 @@ def category_detail(request, slug):
     return render(
         request,
         "directory/program_list.html",
-        {
-            "programs": _published_programs().filter(categories=category),
-            "categories": Category.objects.all(),
-            "query": "",
-            "active_category": category,
-        },
+        _listing_context(
+            _published_programs().filter(categories=category), active_category=category
+        ),
+    )
+
+
+def tag_detail(request, slug):
+    """A tag's own page. Tags are found, not browsed, so this is where a tag
+    link from a program page or a search result lands."""
+    tag = get_object_or_404(Tag, slug=slug)
+    return render(
+        request,
+        "directory/program_list.html",
+        _listing_context(_published_programs().filter(tags=tag), active_tag=tag),
     )
 
 

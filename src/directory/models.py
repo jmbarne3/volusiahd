@@ -84,6 +84,43 @@ class Category(models.Model):
         return reverse("directory:category", kwargs={"slug": self.slug})
 
 
+class Tag(models.Model):
+    """The finer of the two taxonomies. Many more of these than categories.
+
+    A category answers "what kind of thing is this" and there are fewer than
+    ten, so every one can be listed on a filter bar. A tag answers anything
+    else worth searching for — "Lego", "dual enrollment", "wheelchair
+    accessible" — and there will be far too many to list, so tags are found
+    rather than browsed: on a program's own page, on a tag page of their own,
+    and through the search box.
+
+    Curated here and nowhere else. The public forms do not collect them,
+    because the entire value of a tag is that the same idea always carries the
+    same word, and free entry guarantees the opposite. Suggestions from
+    registrants are a later problem, and a different one.
+    """
+
+    name = models.CharField(max_length=60, unique=True)
+    slug = models.SlugField(
+        max_length=60,
+        unique=True,
+        help_text="Used in the web address. Leave blank and it will be filled in from the name.",
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Optional. One or two sentences shown at the top of the tag's page.",
+    )
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("directory:tag", kwargs={"slug": self.slug})
+
+
 class ProgramQuerySet(models.QuerySet):
     def published(self):
         return self.filter(status=Program.Status.PUBLISHED)
@@ -114,6 +151,13 @@ class Program(SanitizedRichTextMixin, models.Model):
         help_text="The full description shown on the program's own page.",
     )
     categories = models.ManyToManyField(Category, related_name="programs", blank=True)
+    tags = models.ManyToManyField(
+        Tag,
+        related_name="programs",
+        blank=True,
+        help_text="The finer taxonomy. Add as many as genuinely apply — tags are "
+        "how someone finds a program they could not have guessed the category of.",
+    )
 
     website = models.URLField(blank=True)
     facebook = models.URLField(

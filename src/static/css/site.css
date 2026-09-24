@@ -118,52 +118,37 @@
 :root[data-theme="light"] { color-scheme: light; }
 :root[data-theme="dark"]  { color-scheme: dark; }
 
-/* Category colours: ten hues, 36 degrees apart, in three tones. Thirty codes,
-   which is the headroom.
+/* Category colours: nine, one per category, each picked rather than generated.
 
-   Hue alone runs out long before thirty — at 12 degrees apart nobody can tell
-   two dots apart — so the third dimension is tone rather than more hue. Within
-   a tone only the hue moves, which is what makes a row of categories read as
-   one set rather than thirty arguments.
+   The previous ring traded distinctness for headroom — thirty codes, which
+   meant near-identical hues separated only by tone. Categories are collapsing
+   into fewer than ten, so the headroom is no longer worth paying for, and the
+   budget goes into telling nine colours apart instead.
 
-   Codes run through all ten hues before the tone changes, so the first ten
-   categories are as far apart as the circle allows and the second ten are a
-   deeper version of the same ring. The dark theme lifts every code at once,
-   because a mid-tone dot disappears against a dark pane. */
-[class*="c"] { --code: oklch(var(--code-l, 55%) var(--code-c, .078) var(--code-h, 255)); }
+   Hues are 40 degrees apart, but lightness and chroma move too, tuned per hue
+   rather than held flat: ochre has to sit lighter than indigo to read as the
+   same strength, and a ring that ignores that looks muddy in the yellows and
+   heavy in the blues. The dark theme lifts each one, because a mid-tone dot
+   disappears against a dark pane.
+
+   Tags do not use this. They are deliberately colourless — see `.tag-chip`. */
+[class*="c"] { --code: oklch(var(--code-l, 55%) var(--code-c, .12) var(--code-h, 255)); }
 [class*="c"] {
   --code: light-dark(
-    oklch(var(--code-l, 55%) var(--code-c, .078) var(--code-h, 255)),
-    oklch(var(--code-l-dark, 76%) var(--code-c-dark, .095) var(--code-h, 255))
+    oklch(var(--code-l, 55%) var(--code-c, .12) var(--code-h, 255)),
+    oklch(var(--code-l-dark, 78%) var(--code-c-dark, .12) var(--code-h, 255))
   );
 }
 
-/* Ten hues, one code per tone each. Only the number changes. */
-.c1,  .c11, .c21 { --code-h: 38; }   /* terracotta */
-.c2,  .c12, .c22 { --code-h: 74; }   /* amber */
-.c3,  .c13, .c23 { --code-h: 110; }  /* olive */
-.c4,  .c14, .c24 { --code-h: 146; }  /* green */
-.c5,  .c15, .c25 { --code-h: 182; }  /* sea */
-.c6,  .c16, .c26 { --code-h: 218; }  /* teal */
-.c7,  .c17, .c27 { --code-h: 254; }  /* blue */
-.c8,  .c18, .c28 { --code-h: 290; }  /* violet */
-.c9,  .c19, .c29 { --code-h: 326; }  /* plum */
-.c10, .c20, .c30 { --code-h: 2; }    /* rose */
-
-/* Three tones. Tone one repeats the defaults rather than relying on them, so
-   a code cannot inherit a tone from whatever it happens to sit inside. */
-.c1, .c2, .c3, .c4, .c5, .c6, .c7, .c8, .c9, .c10 {
-  --code-l: 55%;  --code-c: .078;
-  --code-l-dark: 76%; --code-c-dark: .095;
-}
-.c11, .c12, .c13, .c14, .c15, .c16, .c17, .c18, .c19, .c20 {
-  --code-l: 44%;  --code-c: .1;
-  --code-l-dark: 67%; --code-c-dark: .118;
-}
-.c21, .c22, .c23, .c24, .c25, .c26, .c27, .c28, .c29, .c30 {
-  --code-l: 69%;  --code-c: .046;
-  --code-l-dark: 87%; --code-c-dark: .05;
-}
+.c1 { --code-h:  40; --code-l: 55%; --code-c: .13; --code-l-dark: 78%; --code-c-dark: .12; }  /* terracotta */
+.c2 { --code-h:  80; --code-l: 64%; --code-c: .12; --code-l-dark: 84%; --code-c-dark: .12; }  /* ochre */
+.c3 { --code-h: 120; --code-l: 58%; --code-c: .11; --code-l-dark: 80%; --code-c-dark: .11; }  /* olive */
+.c4 { --code-h: 160; --code-l: 55%; --code-c: .12; --code-l-dark: 78%; --code-c-dark: .12; }  /* green */
+.c5 { --code-h: 200; --code-l: 58%; --code-c: .09; --code-l-dark: 80%; --code-c-dark: .09; }  /* teal */
+.c6 { --code-h: 240; --code-l: 52%; --code-c: .12; --code-l-dark: 76%; --code-c-dark: .12; }  /* blue */
+.c7 { --code-h: 280; --code-l: 47%; --code-c: .14; --code-l-dark: 72%; --code-c-dark: .14; }  /* indigo */
+.c8 { --code-h: 320; --code-l: 50%; --code-c: .13; --code-l-dark: 74%; --code-c-dark: .13; }  /* plum */
+.c9 { --code-h:   0; --code-l: 54%; --code-c: .15; --code-l-dark: 76%; --code-c-dark: .14; }  /* crimson */
 
 .c-all { --code: var(--muted); }
 
@@ -539,6 +524,34 @@ a.tag:hover { color: var(--ink-strong); }
   padding-inline: .7rem;
 }
 .tag.step-up::before { display: none; }
+
+/* Tags, the second taxonomy. Deliberately colourless: nine categories can each
+   hold a hue and stay tellable apart, hundreds of tags cannot, and a page of
+   chips in nine recycled colours implies a grouping that is not there. So tags
+   get shape and no colour, which also keeps the category dots meaning exactly
+   one thing. */
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: var(--s-5) 0 0;
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--hairline);
+  box-shadow: 0 -1px 0 var(--edge);
+}
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  padding: .3rem .75rem;
+  box-shadow: inset 0 0 0 1px var(--edge), inset 0 1px 0 var(--highlight);
+  color: var(--muted);
+  font-size: .85rem;
+  text-decoration: none;
+  transition: color .15s ease, background-color .15s ease;
+}
+.tag-chip:hover { background: var(--pane-raised); color: var(--ink-strong); }
+@media (prefers-reduced-motion: reduce) { .tag-chip { transition: none; } }
 
 .empty { color: var(--muted); }
 

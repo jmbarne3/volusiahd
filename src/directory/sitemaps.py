@@ -1,7 +1,7 @@
 from django.contrib.sitemaps import Sitemap
 from django.urls import reverse
 
-from .models import Category, Page, Program
+from .models import Category, Page, Program, Tag
 
 
 class ProgramSitemap(Sitemap):
@@ -21,6 +21,17 @@ class CategorySitemap(Sitemap):
 
     def items(self):
         return Category.objects.all()
+
+
+class TagSitemap(Sitemap):
+    """Lower priority than a category on purpose: there are many more of these,
+    and a tag page is a narrower answer than a category page."""
+
+    changefreq = "weekly"
+    priority = 0.4
+
+    def items(self):
+        return Tag.objects.filter(programs__status=Program.Status.PUBLISHED).distinct()
 
 
 class PageSitemap(Sitemap):
@@ -54,5 +65,6 @@ SITEMAPS = {
     "static": StaticSitemap,
     "programs": ProgramSitemap,
     "categories": CategorySitemap,
+    "tags": TagSitemap,
     "pages": PageSitemap,
 }

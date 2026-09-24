@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% load directory_extras %}
 
-{% block title %}{% if active_category %}{{ active_category.name }}{% else %}Programs{% endif %} — {{ site_name }}{% endblock %}
-{% block og_title %}{% if active_category %}{{ active_category.name }}{% else %}Programs{% endif %} — {{ site_name }}{% endblock %}
+{% block title %}{% firstof active_category.name active_tag.name "Programs" %} — {{ site_name }}{% endblock %}
+{% block og_title %}{% firstof active_category.name active_tag.name "Programs" %} — {{ site_name }}{% endblock %}
 
 {% block content %}
-<h1>{% if active_category %}{{ active_category.name }}{% elif query %}Results for “{{ query }}”{% else %}All programs{% endif %}</h1>
+<h1>{% if active_category %}{{ active_category.name }}{% elif active_tag %}Tagged “{{ active_tag.name }}”{% elif query %}Results for “{{ query }}”{% else %}All programs{% endif %}</h1>
 {% if active_category.description %}<p class="lede">{{ active_category.description }}</p>{% endif %}
+{% if active_tag.description %}<p class="lede">{{ active_tag.description }}</p>{% endif %}
 
 <form class="search" action="{% url 'directory:program_list' %}">
   <label for="q">Search programs</label>
@@ -16,7 +17,11 @@
 </form>
 
 <nav class="filters">
-  <a class="c-all{% if not active_category %} active{% endif %}" href="{% url 'directory:program_list' %}">All</a>
+  {% comment %}
+  A tag page shows the category bar so there is a way back out of it, but "All"
+  must not read as the current page — on a tag page, none of these is.
+  {% endcomment %}
+  <a class="c-all{% if not active_category and not active_tag %} active{% endif %}" href="{% url 'directory:program_list' %}">All</a>
   {% for category in categories %}
     <a class="c{{ category|colour_code }}{% if category == active_category %} active{% endif %}" href="{{ category.get_absolute_url }}">{{ category.name }}</a>
   {% endfor %}

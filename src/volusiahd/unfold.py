@@ -56,6 +56,11 @@ UNFOLD = {
                         "link": reverse_lazy("admin:directory_category_changelist"),
                     },
                     {
+                        "title": _("Tags"),
+                        "icon": "label",
+                        "link": reverse_lazy("admin:directory_tag_changelist"),
+                    },
+                    {
                         "title": _("Pages"),
                         "icon": "article",
                         "link": reverse_lazy("admin:directory_page_changelist"),

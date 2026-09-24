@@ -12,6 +12,7 @@ urlpatterns = [
     path("programs/", views.program_list, name="program_list"),
     path("programs/<slug:slug>/", views.program_detail, name="program"),
     path("categories/<slug:slug>/", views.category_detail, name="category"),
+    path("tags/<slug:slug>/", views.tag_detail, name="tag"),
     path("register/", views.register_program, name="register"),
     path("register/thanks/", views.register_thanks, name="register_thanks"),
     path("suggest/", views.refer_program, name="refer"),

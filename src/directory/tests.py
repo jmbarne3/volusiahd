@@ -18,7 +18,7 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from PIL import Image
 
-from .models import Category, ContactPerson, Page, Program, Submission
+from .models import Category, ContactPerson, Page, Program, Submission, Tag
 from .templatetags.directory_extras import CATEGORY_COLOUR_COUNT, colour_code
 
 
@@ -143,6 +143,67 @@ class PublicSiteTests(TestCase):
         self.assertNotContains(response, "Dana Reed")
         self.assertNotContains(response, "dana@example.org")
         self.assertNotContains(response, "386-555-0101")
+
+
+class TagTests(TestCase):
+    """Tags are found, not browsed. Every route to one is worth a test."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.tag = Tag.objects.create(name="Lego", slug="lego", description="Brick-based clubs.")
+        cls.other = Tag.objects.create(name="Dual enrollment", slug="dual-enrollment")
+        cls.program = Program.objects.create(
+            name="Brick Builders",
+            slug="brick-builders",
+            short_description="A Lego club in Deltona.",
+            status=Program.Status.PUBLISHED,
+        )
+        cls.program.tags.add(cls.tag)
+        cls.draft = Program.objects.create(
+            name="Secret Bricks",
+            slug="secret-bricks",
+            short_description="Not ready.",
+            status=Program.Status.DRAFT,
+        )
+        cls.draft.tags.add(cls.tag)
+
+    def test_a_tag_page_lists_its_published_programs_only(self):
+        response = self.client.get(reverse("directory:tag", kwargs={"slug": "lego"}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Brick Builders")
+        self.assertContains(response, "Brick-based clubs.")
+        self.assertNotContains(response, "Secret Bricks")
+
+    def test_an_unknown_tag_is_a_404(self):
+        response = self.client.get(reverse("directory:tag", kwargs={"slug": "nope"}))
+        self.assertEqual(response.status_code, 404)
+
+    def test_a_tag_with_no_programs_renders_rather_than_erroring(self):
+        response = self.client.get(reverse("directory:tag", kwargs={"slug": "dual-enrollment"}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Nothing here yet.")
+
+    def test_searching_a_tag_name_finds_the_program(self):
+        """The search box is the main way anyone reaches a tag, because tags
+        are never listed on a filter bar."""
+        response = self.client.get(reverse("directory:program_list"), {"q": "Lego"})
+        self.assertContains(response, "Brick Builders")
+
+    def test_a_program_matching_on_several_tags_appears_once(self):
+        self.program.tags.add(self.other)
+        self.program.tags.create(name="Legoland trips", slug="legoland-trips")
+        response = self.client.get(reverse("directory:program_list"), {"q": "lego"})
+        self.assertContains(response, "Brick Builders", count=1)
+
+    def test_tags_show_on_the_program_page_and_link_to_their_own_page(self):
+        response = self.client.get(reverse("directory:program", kwargs={"slug": self.program.slug}))
+        self.assertContains(response, "Lego")
+        self.assertContains(response, 'href="/tags/lego/"')
+
+    def test_tag_pages_are_in_the_sitemap_once_they_have_a_published_program(self):
+        sitemap = self.client.get("/sitemap.xml").content.decode()
+        self.assertIn("/tags/lego/", sitemap)
+        self.assertNotIn("/tags/dual-enrollment/", sitemap)
 
 
 class CategoryColourTests(SimpleTestCase):

@@ -22,6 +22,17 @@
   <div class="program-layout">
     <div class="program-body">
       {% if program.description %}<div class="prose">{{ program.description|safe }}</div>{% endif %}
+
+      {% if program.tags.all %}
+        {% comment %}
+        Tags sit below the description rather than in the meta row with the
+        categories. A program can carry a dozen, and a dozen chips above the
+        fold would push the description off a phone screen entirely.
+        {% endcomment %}
+        <nav class="tag-row" aria-label="Tags">
+          {% for tag in program.tags.all %}<a class="tag-chip" href="{{ tag.get_absolute_url }}">{{ tag.name }}</a>{% endfor %}
+        </nav>
+      {% endif %}
     </div>
 
     <aside class="program-aside">
