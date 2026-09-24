@@ -85,6 +85,7 @@ ever added, this block needs a hash or a nonce.{% endcomment %}
 </script>
 
 <link rel="stylesheet" href="{% static 'css/site.css' %}">
+{% block extra_css %}{% endblock %}
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -121,5 +122,12 @@ ever added, this block needs a hash or a nonce.{% endcomment %}
     </div>
   </div>
 </footer>
+
+{% comment %}
+Empty on every page but the registration form. The theme switch above is inline
+in <head> because it has to run before first paint; anything down here is an
+enhancement the page already works without.
+{% endcomment %}
+{% block scripts %}{% endblock %}
 </body>
 </html>

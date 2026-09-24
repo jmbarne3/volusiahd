@@ -150,7 +150,21 @@ class Program(SanitizedRichTextMixin, models.Model):
         sanitize=True,
         help_text="The full description shown on the program's own page.",
     )
-    categories = models.ManyToManyField(Category, related_name="programs", blank=True)
+    # One category, not several. A program that is three things at once is a
+    # program nobody can file, and the filter bar only makes sense if every
+    # program appears under exactly one heading. Tags carry everything else.
+    #
+    # PROTECT rather than SET_NULL: deleting a category that programs still
+    # point at should stop and make someone re-file them, not quietly unfile
+    # a dozen listings. The admin shows what is in the way.
+    category = models.ForeignKey(
+        Category,
+        related_name="programs",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        help_text="The one heading this program is filed under.",
+    )
     tags = models.ManyToManyField(
         Tag,
         related_name="programs",
@@ -408,7 +422,17 @@ class Submission(models.Model):
         blank=True,
         help_text="The full description, as plain text. Blank lines start new paragraphs.",
     )
-    categories = models.ManyToManyField(Category, blank=True)
+    # SET_NULL here, unlike on `Program`: a submission is a record of what
+    # someone sent us, and an old one should never be the reason a category
+    # cannot be tidied up.
+    category = models.ForeignKey(
+        Category,
+        related_name="submissions",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    tags = models.ManyToManyField(Tag, blank=True)
 
     website = models.URLField(blank=True)
     facebook = models.URLField("Facebook page", blank=True)

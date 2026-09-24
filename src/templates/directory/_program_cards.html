@@ -5,7 +5,7 @@
       <h3><a href="{{ program.get_absolute_url }}">{{ program.name }}</a></h3>
       <p>{{ program.short_description }}</p>
       <p class="meta">
-        {% for category in program.categories.all %}<span class="tag c{{ category|colour_code }}">{{ category.name }}</span>{% endfor %}
+        {% if program.category %}<span class="tag c{{ program.category|colour_code }}">{{ program.category.name }}</span>{% endif %}
         {% if program.step_up_display %}<span class="tag step-up">{{ program.step_up_display }}</span>{% endif %}
         {% if program.primary_location %}<span class="where">{{ program.primary_location|truncatechars:40 }}{% if program.location_list|length > 1 %} +{{ program.location_list|length|add:"-1" }}{% endif %}</span>{% endif %}
       </p>

@@ -45,15 +45,14 @@ class ContactPersonInline(TabularInline):
 class ProgramAdmin(ModelAdmin):
     inlines = [ContactPersonInline]
     prepopulated_fields = {"slug": ["name"]}
-    list_display = ["name", "category_list", "status", "verified_display", "is_featured"]
+    list_display = ["name", "category", "status", "verified_display", "is_featured"]
     list_display_links = ["name"]
     list_editable = ["status", "is_featured"]
-    list_filter = ["status", "categories", "is_featured", "step_up_direct_pay"]
+    list_filter = ["status", "category", "is_featured", "step_up_direct_pay"]
     list_per_page = 50
     search_fields = ["name", "short_description", "locations", "tags__name", "contacts__name"]
-    filter_horizontal = ["categories"]
-    # Categories are a short list to tick; tags are not. There will be hundreds,
-    # so they get a search box rather than a wall of checkboxes.
+    # One category is a dropdown. Tags are not: there will be hundreds, so they
+    # get a search box rather than a wall of checkboxes.
     autocomplete_fields = ["tags"]
     date_hierarchy = "created_at"
     readonly_fields = ["created_at", "updated_at"]
@@ -63,7 +62,7 @@ class ProgramAdmin(ModelAdmin):
         (
             None,
             {
-                "fields": ["name", "slug", "status", "is_featured", "categories", "tags"],
+                "fields": ["name", "slug", "status", "is_featured", "category", "tags"],
             },
         ),
         (
@@ -114,17 +113,13 @@ class ProgramAdmin(ModelAdmin):
     ]
 
     def get_queryset(self, request):
-        return super().get_queryset(request).prefetch_related("categories")
+        return super().get_queryset(request).select_related("category")
 
     def get_search_results(self, request, queryset, search_term):
         # Searching a joined m2m duplicates rows. Without this, one program
         # carrying three matching tags shows up three times in the changelist.
         queryset, _ = super().get_search_results(request, queryset, search_term)
         return queryset.distinct(), False
-
-    @display(description="Categories")
-    def category_list(self, obj):
-        return ", ".join(c.name for c in obj.categories.all()) or "—"
 
     @display(description="Last verified", ordering="last_verified_on")
     def verified_display(self, obj):
@@ -215,10 +210,12 @@ class SubmissionAdmin(ModelAdmin):
         "submitter_name",
         "created_at",
     ]
-    list_filter = ["kind", "status", "categories"]
+    list_filter = ["kind", "status", "category"]
     search_fields = ["program_name", "submitter_name", "submitter_email", "locations"]
     date_hierarchy = "created_at"
     actions = ["approve_and_publish", "create_draft_program", "mark_rejected"]
+    # Her chance to correct the registrant's tagging before it is published.
+    autocomplete_fields = ["tags"]
 
     # Everything the public typed is a record of what they said, not something
     # we edit. Corrections happen on the Program after approval.
@@ -258,7 +255,8 @@ class SubmissionAdmin(ModelAdmin):
                     "program_name",
                     "short_description",
                     "description",
-                    "categories",
+                    "category",
+                    "tags",
                     "logo_preview",
                 ]
             },
@@ -385,6 +383,7 @@ def build_program_from(submission, status):
         short_description=(
             submission.short_description or submission.description[:240] or submission.program_name
         ),
+        category=submission.category,
         description=submission.description_as_html(),
         website=submission.website,
         facebook=submission.facebook,
@@ -418,7 +417,7 @@ def build_program_from(submission, status):
             submission.logo.close()
 
     program.save()
-    program.categories.set(submission.categories.all())
+    program.tags.set(submission.tags.all())
     return program
 
 

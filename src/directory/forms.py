@@ -12,7 +12,7 @@ formatting nobody asked for; plain text becomes paragraphs on approval.
 
 from django import forms
 
-from .models import Category, Submission
+from .models import Category, Submission, Tag
 
 # Bots fill every field they find; people never see this one.
 HONEYPOT_FIELD = "website_url"
@@ -28,11 +28,15 @@ class BaseSubmissionForm(forms.ModelForm):
 
     website_url = forms.CharField(required=False, widget=forms.HiddenInput)
 
-    categories = forms.ModelMultipleChoiceField(
+    # One category, so a dropdown rather than a list of checkboxes. There are
+    # fewer than ten and they are mutually exclusive by design; anything finer
+    # than a heading is a tag.
+    category = forms.ModelChoiceField(
         queryset=Category.objects.all(),
         required=False,
-        widget=forms.CheckboxSelectMultiple,
-        help_text="Tick any that apply.",
+        widget=forms.Select,
+        empty_label="Choose the closest one",
+        help_text="The one heading that fits best. Everything else is a tag.",
     )
 
     def clean(self):
@@ -54,13 +58,37 @@ class ProgramRegistrationForm(BaseSubmissionForm):
         label="I run this program, or I am authorized to list it",
     )
 
+    # Pick from the vocabulary; never add to it. A free-text tag field would
+    # give us "co-op", "Co-Op" and "coop" inside a week, and the whole value of
+    # a tag is that the same idea always carries the same word. The queryset is
+    # evaluated per request rather than at import, so a tag added in the admin
+    # this morning is on the form this afternoon.
+    tags = forms.ModelMultipleChoiceField(
+        queryset=Tag.objects.all(),
+        required=False,
+        # A plain <select multiple>, which Select2 turns into a searchable
+        # multiselect on the registration page. Without JavaScript it stays a
+        # usable native control rather than nothing at all.
+        widget=forms.SelectMultiple(
+            attrs={
+                "data-tag-select": "",
+                "data-placeholder": "Start typing to find a tag",
+                "size": "8",
+            }
+        ),
+        label="Tags",
+        help_text="Tick anything that applies. We keep this list, so if the word you "
+        "want is missing, say so in your description and we will look at adding it.",
+    )
+
     class Meta:
         model = Submission
         fields = [
             "program_name",
             "short_description",
             "description",
-            "categories",
+            "category",
+            "tags",
             "website",
             "facebook",
             "email",
@@ -190,7 +218,7 @@ class ProgramReferralForm(BaseSubmissionForm):
             "email",
             "phone",
             "locations",
-            "categories",
+            "category",
             "description",
             "submitter_name",
             "submitter_email",

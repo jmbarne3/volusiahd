@@ -16,7 +16,7 @@
   <p class="lede">{{ program.short_description }}</p>
 
   <p class="meta">
-    {% for category in program.categories.all %}<a class="tag c{{ category|colour_code }}" href="{{ category.get_absolute_url }}">{{ category.name }}</a>{% endfor %}
+    {% if program.category %}<a class="tag c{{ program.category|colour_code }}" href="{{ program.category.get_absolute_url }}">{{ program.category.name }}</a>{% endif %}
   </p>
 
   <div class="program-layout">

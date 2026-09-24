@@ -6,7 +6,7 @@ from .models import Category, Page, Program, Tag
 
 
 def _published_programs():
-    return Program.objects.published().prefetch_related("categories")
+    return Program.objects.published().select_related("category")
 
 
 def _listing_context(programs, **extra):
@@ -49,7 +49,7 @@ def program_list(request):
     active_category = None
     if category_slug:
         active_category = get_object_or_404(Category, slug=category_slug)
-        programs = programs.filter(categories=active_category)
+        programs = programs.filter(category=active_category)
 
     return render(
         request,
@@ -63,9 +63,7 @@ def category_detail(request, slug):
     return render(
         request,
         "directory/program_list.html",
-        _listing_context(
-            _published_programs().filter(categories=category), active_category=category
-        ),
+        _listing_context(_published_programs().filter(category=category), active_category=category),
     )
 
 

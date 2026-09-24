@@ -13,7 +13,9 @@ from io import BytesIO
 
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.contrib.staticfiles import finders
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db.models import ProtectedError
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from PIL import Image
@@ -34,8 +36,8 @@ class PublicSiteTests(TestCase):
             status=Program.Status.PUBLISHED,
             locations="101 Woodland Blvd, DeLand 32720",
             is_featured=True,
+            category=cls.category,
         )
-        cls.program.categories.add(cls.category)
         cls.draft = Program.objects.create(
             name="Not Ready",
             slug="not-ready",
@@ -206,6 +208,51 @@ class TagTests(TestCase):
         self.assertNotIn("/tags/dual-enrollment/", sitemap)
 
 
+class CategoryDeletionTests(TestCase):
+    def test_a_category_in_use_cannot_be_deleted(self):
+        """PROTECT, not SET_NULL.
+
+        Deleting a heading that programs are filed under should stop and make
+        someone re-file them. Silently unfiling a dozen listings is the failure
+        mode this prevents, and it is one nobody would notice.
+        """
+        category = Category.objects.create(name="Co-ops", slug="co-ops")
+        Program.objects.create(
+            name="Sample", slug="sample", short_description="A co-op.", category=category
+        )
+        with self.assertRaises(ProtectedError):
+            category.delete()
+
+    def test_a_category_on_an_old_submission_can_be_deleted(self):
+        """SET_NULL there, because a processed record should never block tidying
+        up the taxonomy."""
+        category = Category.objects.create(name="Retired", slug="retired")
+        submission = Submission.objects.create(program_name="Old thing", category=category)
+        category.delete()
+        submission.refresh_from_db()
+        self.assertIsNone(submission.category)
+
+
+class VendoredAssetTests(SimpleTestCase):
+    """The registration page borrows Select2 from django.contrib.admin.
+
+    Nothing in Django promises those paths to code outside the admin, so a
+    Django upgrade that moved or dropped them would break the tag field with no
+    other warning — the page would render, the script would 404, and the field
+    would quietly fall back to a native multiselect.
+    """
+
+    def test_select2_and_jquery_resolve(self):
+        for path in [
+            "admin/css/vendor/select2/select2.min.css",
+            "admin/js/vendor/select2/select2.full.min.js",
+            "admin/js/vendor/jquery/jquery.min.js",
+            "css/tag-select.css",
+        ]:
+            with self.subTest(path=path):
+                self.assertIsNotNone(finders.find(path), f"{path} is no longer on disk")
+
+
 class CategoryColourTests(SimpleTestCase):
     """The colour code lives in Python; the colours live in the stylesheet.
 
@@ -287,7 +334,7 @@ class RegistrationTests(TestCase):
             "program_name": "Coastal Co-op",
             "short_description": "A Thursday co-op for K–8 families in Ormond Beach.",
             "description": "We meet weekly.\n\nClasses run September through May.",
-            "categories": [str(self.category.pk)],
+            "category": str(self.category.pk),
             "website": "https://coastal.example.org",
             "facebook": "https://facebook.com/groups/coastal",
             "email": "hello@coastal.example.org",
@@ -341,6 +388,54 @@ class RegistrationTests(TestCase):
         response = self.client.post(reverse("directory:register"), self._payload(serves_grades=""))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(Submission.objects.count(), 0)
+
+    def test_a_registrant_can_only_pick_tags_that_already_exist(self):
+        """The whole point of a curated vocabulary.
+
+        A submitted value that is not a tag primary key has to be refused, or
+        the form becomes free entry by another route.
+        """
+        tag = Tag.objects.create(name="Lego", slug="lego")
+        response = self.client.post(
+            reverse("directory:register"), self._payload(tags=[str(tag.pk), "9999"])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Submission.objects.count(), 0)
+
+    def test_chosen_tags_are_stored_on_the_submission(self):
+        tag = Tag.objects.create(name="Lego", slug="lego")
+        Tag.objects.create(name="Unpicked", slug="unpicked")
+        self.client.post(reverse("directory:register"), self._payload(tags=[str(tag.pk)]))
+        self.assertEqual(list(Submission.objects.get().tags.all()), [tag])
+
+    def test_the_tag_field_offers_every_existing_tag_and_no_text_box(self):
+        Tag.objects.create(name="Dual enrollment", slug="dual-enrollment")
+        response = self.client.get(reverse("directory:register"))
+        self.assertContains(response, "data-tag-select")
+        self.assertContains(response, "Dual enrollment")
+        # A <select> the browser validates against, not an input they can type into.
+        self.assertContains(response, 'name="tags"')
+        self.assertNotContains(response, '<input type="text" name="tags"')
+
+    def test_only_one_category_survives_a_form_that_posts_two(self):
+        """The field is a dropdown, but the wire is not.
+
+        Nothing stops a crafted POST carrying two `category` values, and the
+        point of this change is that a program ends up under exactly one
+        heading however the request arrived.
+        """
+        other = Category.objects.create(name="Sports", slug="sports", sort_order=20)
+        self.client.post(
+            reverse("directory:register"),
+            self._payload(category=[str(self.category.pk), str(other.pk)]),
+        )
+        submission = Submission.objects.get()
+        self.assertEqual(submission.category, other)
+
+    def test_the_category_field_is_a_dropdown(self):
+        response = self.client.get(reverse("directory:register"))
+        self.assertContains(response, '<select name="category"')
+        self.assertNotContains(response, 'name="categories"')
 
     def test_authorization_is_required(self):
         response = self.client.post(reverse("directory:register"), self._payload(is_authorized=""))
@@ -485,8 +580,9 @@ class ApprovalTests(TestCase):
             "is_authorized": True,
             **overrides,
         }
+        fields.setdefault("category", self.category)
         submission = Submission.objects.create(**fields)
-        submission.categories.add(self.category)
+        submission.tags.add(Tag.objects.get_or_create(name="Lego", slug="lego")[0])
         return submission
 
     def _run(self, action, submission):
@@ -527,7 +623,12 @@ class ApprovalTests(TestCase):
         self.assertTrue(program.step_up_direct_pay)
         self.assertTrue(program.step_up_pep)
         self.assertFalse(program.step_up_fes_ua)
-        self.assertIn(self.category, program.categories.all())
+        self.assertEqual(program.category, self.category)
+        # The tags the registrant picked, not a fresh empty set.
+        self.assertEqual(
+            list(program.tags.values_list("name", flat=True)),
+            list(submission.tags.values_list("name", flat=True)),
+        )
         self.assertIsNotNone(program.last_verified_on)
 
         # Plain text became paragraphs.

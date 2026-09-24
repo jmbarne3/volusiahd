@@ -1,9 +1,43 @@
 {% extends "base.html" %}
-{% load directory_extras %}
+{% load directory_extras static %}
 
 {% block title %}Register your program — {{ site_name }}{% endblock %}
 {% block og_title %}Register your program{% endblock %}
 {% block meta_description %}Run a homeschool co-op, class, team, or support group in Volusia County? Add it to the directory.{% endblock %}
+
+{% comment %}
+Select2 comes from django.contrib.admin's vendored copies rather than a CDN or a
+checked-in bundle: they are already installed, already collected by
+collectstatic and already served by whitenoise, so this page adds no new
+dependency and no third-party request. The coupling is to admin's static paths,
+which a Django upgrade could in principle move, so a test asserts the four
+files still resolve.
+{% endcomment %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'admin/css/vendor/select2/select2.min.css' %}">
+<link rel="stylesheet" href="{% static 'css/tag-select.css' %}">
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'admin/js/vendor/jquery/jquery.min.js' %}"></script>
+<script src="{% static 'admin/js/vendor/select2/select2.full.min.js' %}"></script>
+<script>
+  // The field is a working <select multiple> before this runs and after it
+  // fails, so everything here is guarded rather than assumed.
+  (function () {
+    var jq = window.jQuery;
+    var select = document.querySelector("select[data-tag-select]");
+    if (!jq || !select || typeof jq.fn.select2 !== "function") return;
+    // `size` only helps the native fallback; Select2 would honour it as a height.
+    select.removeAttribute("size");
+    jq(select).select2({
+      width: "100%",
+      placeholder: select.dataset.placeholder || "",
+      closeOnSelect: false
+    });
+  })();
+</script>
+{% endblock %}
 
 {% block content %}
 <h1>Register your program</h1>
@@ -22,7 +56,13 @@
     {% field form.program_name %}
     {% field form.short_description %}
     {% field form.description %}
-    {% field form.categories %}
+    {% field form.category %}
+  </fieldset>
+
+  <fieldset>
+    <legend>Tags</legend>
+    <p class="hint">Optional, and a shorter way for families to find you. Pick as many as genuinely apply — picking everything helps nobody.</p>
+    {% field form.tags %}
   </fieldset>
 
   <fieldset>
