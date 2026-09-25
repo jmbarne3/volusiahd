@@ -132,7 +132,9 @@
 
 /* The native control the form falls back to. Select2 hides the <select> and
    renders its own, so these rules apply only when the script did not run. */
-select[data-tag-select] {
+/* Prefixed with .field so it still wins against the site-wide control recipe,
+   which now covers every <select> on a form. */
+.field select[data-tag-select] {
   width: 100%;
   min-height: 11rem;
   padding: .45rem;

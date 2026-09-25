@@ -12,7 +12,8 @@ formatting nobody asked for; plain text becomes paragraphs on approval.
 
 from django import forms
 
-from .models import Category, Submission, Tag
+from .addresses import LocationsField
+from .models import Category, Submission, SubmissionLocation, Tag
 
 # Bots fill every field they find; people never see this one.
 HONEYPOT_FIELD = "website_url"
@@ -59,11 +60,42 @@ class BaseSubmissionForm(forms.ModelForm):
         help_text="The one heading that fits best. Everything else is a tag.",
     )
 
+    # Not a model field any more. A place is a row with coordinates on it, so
+    # the form collects them through the picker and writes them after the
+    # submission itself exists.
+    locations = LocationsField(required=False)
+
     def clean(self):
         cleaned = super().clean()
         if cleaned.get(HONEYPOT_FIELD):
             raise forms.ValidationError("This submission could not be accepted.")
         return cleaned
+
+    def save(self, commit=True):
+        submission = super().save(commit=commit)
+        if commit:
+            self._write_locations(submission)
+        else:
+            # `save(commit=False)` defers related objects to `save_m2m()`, and
+            # these are related objects like any other.
+            deferred = self.save_m2m
+
+            def save_m2m():
+                deferred()
+                self._write_locations(submission)
+
+            self.save_m2m = save_m2m
+        return submission
+
+    def _write_locations(self, submission):
+        """One row per place, in the order they were added."""
+        submission.locations.all().delete()
+        SubmissionLocation.objects.bulk_create(
+            [
+                SubmissionLocation(submission=submission, sort_order=order, **place)
+                for order, place in enumerate(self.cleaned_data.get("locations") or [])
+            ]
+        )
 
 
 class ProgramRegistrationForm(BaseSubmissionForm):
@@ -143,7 +175,6 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "facebook": "Facebook page URL",
             "email": "Public email address",
             "phone": "Public phone number",
-            "locations": "Where you meet",
             "serves_grades": "Grades served",
             "age_min": "Youngest age",
             "age_max": "Oldest age",
@@ -164,9 +195,6 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "Leave a blank line between paragraphs.",
             "facebook": "The whole address, starting with https://.",
             "email": "Published on your page. Leave blank if you would rather not.",
-            "locations": "One address per line. If you meet in more than one place, "
-            "add a line for each. No fixed address? Indicate which city or cities you"
-            " meet in if your meeting location varies.",
             "serves_grades": "Free text, e.g. 'K–8' or 'high school only'. "
             "If it varies, say so — 'varies by class' is a useful answer too.",
             "cost_notes": "e.g. '$45/semester per family, plus a $20 materials fee'.",
@@ -183,7 +211,6 @@ class ProgramRegistrationForm(BaseSubmissionForm):
         widgets = {
             "short_description": forms.TextInput,
             "description": forms.Textarea(attrs={"rows": 8}),
-            "locations": forms.Textarea(attrs={"rows": 3}),
             "cost_notes": forms.Textarea(attrs={"rows": 3}),
             "meeting_schedule": forms.Textarea(attrs={"rows": 3}),
         }
@@ -200,6 +227,12 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "submitter_email",
         ]:
             self.fields[name].required = True
+        self.fields["locations"].label = "Where you meet"
+        self.fields["locations"].help_text = (
+            "Start typing an address and pick the match. If you meet in more than one "
+            "place, add each of them. No fixed address? A city is a perfectly good "
+            "answer — type it and press +."
+        )
 
     def clean(self):
         cleaned = super().clean()
@@ -277,20 +310,24 @@ class ProgramReferralForm(BaseSubmissionForm):
             "facebook": "Facebook page URL",
             "email": "Their email, if you know it",
             "phone": "Their phone, if you know it",
-            "locations": "Where they meet",
             "description": "What do you know about it?",
             "submitter_name": "Your name",
             "submitter_email": "Your email",
         }
         help_texts = {
-            "locations": "A city is plenty. An address if you have one.",
             "description": "Anything helps — what they do, roughly when they meet, who to ask for.",
             "submitter_email": "So we can follow up if we have a question. It is never published.",
         }
         widgets = {
-            "locations": forms.TextInput,
             "description": forms.Textarea(attrs={"rows": 5}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["locations"].label = "Where they meet"
+        self.fields[
+            "locations"
+        ].help_text = "A city is plenty. Start typing and pick the match, or type it and press +."
 
     def save(self, commit=True):
         self.instance.kind = Submission.Kind.REFERRAL

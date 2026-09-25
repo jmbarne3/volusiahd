@@ -16,9 +16,11 @@ files still resolve.
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'admin/css/vendor/select2/select2.min.css' %}">
 <link rel="stylesheet" href="{% static 'css/tag-select.css' %}">
+<link rel="stylesheet" href="{% static 'css/address-picker.css' %}">
 {% endblock %}
 
 {% block scripts %}
+<script src="{% static 'js/address-picker.js' %}" defer></script>
 <script src="{% static 'admin/js/vendor/jquery/jquery.min.js' %}"></script>
 <script src="{% static 'admin/js/vendor/select2/select2.full.min.js' %}"></script>
 <script>
@@ -109,6 +111,7 @@ files still resolve.
 
   <fieldset>
     <legend>Where you meet</legend>
+    <p class="hint">Add every place you meet. Pick the match from the list so that families searching near them can find you — and if the place you mean is not on the list, type it and press + anyway.</p>
     {% field form.locations %}
   </fieldset>
 

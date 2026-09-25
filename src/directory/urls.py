@@ -17,6 +17,8 @@ urlpatterns = [
     path("register/thanks/", views.register_thanks, name="register_thanks"),
     path("suggest/", views.refer_program, name="refer"),
     path("suggest/thanks/", views.refer_thanks, name="refer_thanks"),
+    # Asked by the address picker on both public forms and in the admin.
+    path("where/", views.address_search, name="address_search"),
     path(
         "robots.txt",
         TemplateView.as_view(template_name="robots.txt", content_type="text/plain"),

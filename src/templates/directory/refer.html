@@ -1,8 +1,16 @@
 {% extends "base.html" %}
-{% load directory_extras %}
+{% load directory_extras static %}
 
 {% block title %}Suggest a program — {{ site_name }}{% endblock %}
 {% block og_title %}Suggest a program{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/address-picker.css' %}">
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/address-picker.js' %}" defer></script>
+{% endblock %}
 
 {% block content %}
 <h1>Suggest a program</h1>

@@ -7,17 +7,29 @@ codebase can add a program without asking a question.
 
 from pathlib import Path
 
+from django import forms
 from django.contrib import admin, messages
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.db.models import Count
+from django.urls import reverse_lazy
 from django.utils import timezone
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
+from django.utils.safestring import mark_safe
 from django.utils.text import slugify
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.decorators import action, display
 
-from .models import Category, ContactPerson, Page, Program, Submission, Tag
+from .addresses import DEBOUNCE_MS, MIN_QUERY_CHARS, parse_place
+from .models import (
+    Category,
+    ContactPerson,
+    Page,
+    Program,
+    ProgramLocation,
+    Submission,
+    Tag,
+)
 
 # She will never touch Groups. Site-wide permissions are not a thing we use.
 admin.site.unregister(Group)
@@ -27,10 +39,87 @@ admin.site.site_header = "Volusia County Homeschool Directory"
 admin.site.index_title = "Records"
 
 
+def _addresses(count):
+    """Count of addresses, pluralised: 1 address, 3 addresses."""
+    return f"{count} address{'es' if count != 1 else ''}"
+
+
 def pending_submission_count(request):
     """Sidebar badge: how many submissions are waiting on her."""
     count = Submission.objects.filter(status=Submission.Status.NEW).count()
     return count or None
+
+
+class ProgramLocationForm(forms.ModelForm):
+    """The inline row, with the address picker on its address box.
+
+    Typing in `query` offers suggestions and picking one fills the row. The
+    hidden `picked` field carries the whole match — including the city and
+    postcode, which have no column here and would otherwise be lost for no better
+    reason than that the table is already wide enough.
+
+    Nothing here is required for the row to work. An editor who types an address
+    and saves gets the same server-side lookup as before, which is also what
+    happens when the script does not run.
+    """
+
+    picked = forms.CharField(required=False, widget=forms.HiddenInput)
+
+    class Meta:
+        model = ProgramLocation
+        fields = ["query", "label", "latitude", "longitude", "sort_order"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["query"].widget.attrs.update(
+            {
+                "data-address-row": "",
+                "data-endpoint": str(reverse_lazy("directory:address_search")),
+                "data-min-chars": MIN_QUERY_CHARS,
+                "data-debounce": DEBOUNCE_MS,
+                "autocomplete": "off",
+            }
+        )
+
+    def _post_clean(self):
+        # After super(), because `construct_instance` has just written the
+        # visible columns onto the instance and a pick has to win over them —
+        # it is the newer answer, and the one the editor actually chose.
+        super()._post_clean()
+        raw = self.cleaned_data.get("picked")
+        if not raw or not self.cleaned_data.get("query"):
+            return
+        try:
+            place = parse_place(raw)
+        except forms.ValidationError as error:
+            self.add_error(None, error)
+            return
+        for field, value in place.items():
+            setattr(self.instance, field, value)
+        # The editor's own wording for the place, not the geocoder's.
+        self.instance.query = self.cleaned_data["query"]
+
+
+class ProgramLocationInline(TabularInline):
+    """Where a program meets, one row per place.
+
+    `query` is the only column an editor normally types into: pick a suggestion
+    and the rest fills itself in, or save and the server looks it up. The
+    resolved columns stay editable anyway, because a geocoder that has put a
+    program on the wrong side of town is a thing an editor with a map can fix in
+    ten seconds and cannot fix at all through a read-only field.
+    """
+
+    model = ProgramLocation
+    form = ProgramLocationForm
+    extra = 1
+    fields = ["query", "label", "latitude", "longitude", "sort_order", "picked"]
+    verbose_name = "meeting place"
+    verbose_name_plural = "Where this program meets"
+
+    class Media:
+        css = {"all": ["css/address-picker.css"]}
+        js = ["js/address-picker.js"]
 
 
 class ContactPersonInline(TabularInline):
@@ -43,20 +132,35 @@ class ContactPersonInline(TabularInline):
 
 @admin.register(Program)
 class ProgramAdmin(ModelAdmin):
-    inlines = [ContactPersonInline]
+    inlines = [ProgramLocationInline, ContactPersonInline]
     prepopulated_fields = {"slug": ["name"]}
-    list_display = ["name", "category", "status", "verified_display", "is_featured"]
+    list_display = [
+        "name",
+        "category",
+        "located_display",
+        "status",
+        "verified_display",
+        "is_featured",
+    ]
     list_display_links = ["name"]
     list_editable = ["status", "is_featured"]
     list_filter = ["status", "category", "is_featured", "step_up_direct_pay"]
     list_per_page = 50
-    search_fields = ["name", "short_description", "locations", "tags__name", "contacts__name"]
+    search_fields = [
+        "name",
+        "short_description",
+        "locations__query",
+        "locations__label",
+        "locations__city",
+        "tags__name",
+        "contacts__name",
+    ]
     # One category is a dropdown. Tags are not: there will be hundreds, so they
     # get a search box rather than a wall of checkboxes.
     autocomplete_fields = ["tags"]
     date_hierarchy = "created_at"
     readonly_fields = ["created_at", "updated_at"]
-    actions = ["mark_verified_today", "publish_selected"]
+    actions = ["look_up_addresses", "mark_verified_today", "publish_selected"]
 
     fieldsets = [
         (
@@ -75,13 +179,6 @@ class ProgramAdmin(ModelAdmin):
             "Contact",
             {
                 "fields": ["website", "facebook", "email", "phone"],
-            },
-        ),
-        (
-            "Location",
-            {
-                "fields": ["locations"],
-                "classes": ["collapse"],
             },
         ),
         (
@@ -113,13 +210,75 @@ class ProgramAdmin(ModelAdmin):
     ]
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related("category")
+        return (
+            super().get_queryset(request).select_related("category").prefetch_related("locations")
+        )
 
     def get_search_results(self, request, queryset, search_term):
         # Searching a joined m2m duplicates rows. Without this, one program
         # carrying three matching tags shows up three times in the changelist.
         queryset, _ = super().get_search_results(request, queryset, search_term)
         return queryset.distinct(), False
+
+    def save_related(self, request, form, formsets, change):
+        """Look up any address that still needs it, as part of the save.
+
+        This is the only place a geocoder is called inside a request, and it is
+        an admin request on purpose: somebody is sitting there, the wait is about
+        a second per new address, and the result is on screen before they
+        navigate away. No public page ever calls out to anybody.
+        """
+        super().save_related(request, form, formsets, change)
+        self._look_up(request, form.instance.locations.pending())
+
+    def _look_up(self, request, locations, limit=25):
+        """Resolve `locations` and tell the editor what happened.
+
+        Bounded, because an editor who selects two hundred programs should not
+        be left watching a spinner while we work politely through a free
+        service. `manage.py geocode` is the path for that, and it says so.
+        """
+        pending = list(locations[:limit])
+        if not pending:
+            return
+        resolved, missed, gave_up = ProgramLocation.objects.filter(
+            pk__in=[location.pk for location in pending]
+        ).look_up()
+
+        if resolved:
+            self.message_user(request, f"Put {_addresses(resolved)} on the map.", messages.SUCCESS)
+        if missed:
+            self.message_user(
+                request,
+                f"Could not match {_addresses(missed)}. Reword it, or fill in the "
+                "latitude and longitude by hand.",
+                messages.WARNING,
+            )
+        if gave_up:
+            self.message_user(
+                request,
+                "The address lookup service could not be reached, so some addresses are "
+                "still waiting. Select the program and run “Look up addresses” later.",
+                messages.WARNING,
+            )
+
+    @action(description="Look up addresses")
+    def look_up_addresses(self, request, queryset):
+        self._look_up(
+            request,
+            ProgramLocation.objects.filter(program__in=queryset).exclude(
+                status=ProgramLocation.Status.RESOLVED
+            ),
+        )
+
+    @display(description="On the map")
+    def located_display(self, obj):
+        locations = list(obj.locations.all())
+        if not locations:
+            return "—"
+        placed = sum(1 for location in locations if location.has_point)
+        colour = "#166534" if placed == len(locations) else "#b45309"
+        return format_html('<span style="color:{}">{} of {}</span>', colour, placed, len(locations))
 
     @display(description="Last verified", ordering="last_verified_on")
     def verified_display(self, obj):
@@ -247,7 +406,14 @@ class SubmissionAdmin(ModelAdmin):
         "created_at",
     ]
     list_filter = ["kind", "status", "category"]
-    search_fields = ["program_name", "submitter_name", "submitter_email", "locations"]
+    search_fields = [
+        "program_name",
+        "submitter_name",
+        "submitter_email",
+        "locations__query",
+        "locations__label",
+        "locations__city",
+    ]
     date_hierarchy = "created_at"
     actions = ["approve_and_publish", "create_draft_program", "mark_rejected"]
     # Her chance to correct the registrant's tagging before it is published.
@@ -264,7 +430,7 @@ class SubmissionAdmin(ModelAdmin):
         "facebook",
         "email",
         "phone",
-        "locations",
+        "places_display",
         "serves_grades",
         "age_min",
         "age_max",
@@ -299,7 +465,7 @@ class SubmissionAdmin(ModelAdmin):
         ),
         (
             "How to reach them",
-            {"fields": ["website", "facebook", "email", "phone", "locations"]},
+            {"fields": ["website", "facebook", "email", "phone", "places_display"]},
         ),
         (
             "Who it serves and when",
@@ -341,10 +507,31 @@ class SubmissionAdmin(ModelAdmin):
     def kind_display(self, obj):
         return obj.get_kind_display().split(" — ")[0]
 
+    @display(description="Where they meet")
+    def places_display(self, obj):
+        """Every place they named, and whether it is actually on the map.
+
+        Worth saying out loud on this screen: a place the submitter picked off
+        the suggestion list arrives with coordinates, and one they typed in their
+        own words does not. The second kind is not a problem, but it is the kind
+        that will need a look after approval.
+        """
+        places = list(obj.locations.all())
+        if not places:
+            return "—"
+        return format_html_join(
+            mark_safe("<br>"),
+            "{}{}",
+            (
+                (place.display_name, "" if place.has_point else " — not on the map")
+                for place in places
+            ),
+        )
+
     @display(description="Where")
     def where_display(self, obj):
         """One line in a list column, however many addresses they gave us."""
-        lines = [line.strip() for line in (obj.locations or "").splitlines() if line.strip()]
+        lines = obj.location_lines
         if not lines:
             return "—"
         first = lines[0] if len(lines[0]) <= 40 else lines[0][:39] + "…"
@@ -425,7 +612,6 @@ def build_program_from(submission, status):
         facebook=submission.facebook,
         email=submission.email,
         phone=submission.phone,
-        locations=submission.locations,
         serves_grades=submission.serves_grades,
         age_min=submission.age_min,
         age_max=submission.age_max,
@@ -454,6 +640,17 @@ def build_program_from(submission, status):
 
     program.save()
     program.tags.set(submission.tags.all())
+
+    # The places come across exactly as they arrived, coordinates and all.
+    # Anything the submitter picked off the suggestion list is already resolved
+    # and needs no lookup; anything they typed in their own words arrives
+    # pending, which is what "Look up addresses" and `manage.py geocode` are for.
+    ProgramLocation.objects.bulk_create(
+        [
+            ProgramLocation(program=program, **place.copied_values())
+            for place in submission.locations.all()
+        ]
+    )
     return program
 
 

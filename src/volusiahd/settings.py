@@ -6,6 +6,7 @@ from `fly.toml` [env] and `fly secrets`, and .dockerignore keeps .env out of the
 image. See docs/hosting-setup.md.
 """
 
+import sys
 from pathlib import Path
 
 import environ
@@ -143,6 +144,25 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 GOOGLE_OAUTH_CLIENT_ID = env("GOOGLE_OAUTH_CLIENT_ID", default="")
 GOOGLE_OAUTH_CLIENT_SECRET = env("GOOGLE_OAUTH_CLIENT_SECRET", default="")
+
+# --- Geocoding --------------------------------------------------------------
+# Addresses are resolved to coordinates by Photon, an OpenStreetMap geocoder
+# that needs no API key and no billing account. The public instance at
+# photon.komoot.io is run as a courtesy and asks callers not to use it for bulk
+# work, so this URL exists to be pointed at a self-hosted Photon if the volume
+# here ever stops being polite. See src/directory/geocoding.py.
+#
+# Blank turns lookups off: nothing calls out, and addresses stay pending until
+# something resolves them. That is what the test suite runs with, because a
+# suite that depends on somebody else's server fails when their server does.
+
+TESTING = "test" in sys.argv
+GEOCODER_URL = "" if TESTING else env("GEOCODER_URL", default="https://photon.komoot.io/api")
+
+# Results are biased toward the middle of Volusia County so that "Main Street"
+# finds the right Main Street. A bias, not a bounding box — a program a mile
+# into Flagler or Seminole is still a program families here drive to.
+GEOCODER_BIAS = (29.05, -81.2)
 
 # --- Site identity, used in templates and Open Graph tags -------------------
 

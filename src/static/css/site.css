@@ -681,10 +681,19 @@ a.tag:hover { color: var(--ink-strong); }
 .field label, .field .group-label,
 .stack label { display: block; font-weight: 580; margin-bottom: var(--s-2); color: var(--ink-strong); }
 
-.field input[type=text], .field input[type=email], .field input[type=url],
-.field input[type=tel], .field input[type=number], .field input[type=file], .field textarea,
-.stack input[type=text], .stack input[type=email], .stack input[type=url],
-.stack input[type=tel], .stack textarea {
+/* One recipe for every control on a form, listed by what it is not rather than
+   by type. The enumerated version this replaces quietly left out anything it
+   had not been told about — a <select>, a search box — and those then turned up
+   on the page wearing whatever the browser felt like. The exclusions are the
+   controls that are genuinely not boxes: ticks, radios, hidden inputs, and
+   Select2's own inline search field, which lives inside a chips box of its own
+   and would be wrecked by a full-width border. */
+.field :is(input, select, textarea):not(
+  [type=checkbox], [type=radio], [type=hidden], .select2-search__field
+),
+.stack :is(input, select, textarea):not(
+  [type=checkbox], [type=radio], [type=hidden], .select2-search__field
+) {
   width: 100%;
   padding: .6rem .85rem;
   border: 1px solid var(--hairline);
@@ -696,9 +705,38 @@ a.tag:hover { color: var(--ink-strong); }
   color: var(--ink);
   font: inherit;
 }
-.field input:focus-visible, .field textarea:focus-visible,
-.stack input:focus-visible, .stack textarea:focus-visible { outline-offset: 1px; }
+.field :is(input, select, textarea):focus-visible,
+.stack :is(input, select, textarea):focus-visible { outline-offset: 1px; }
 .field textarea { resize: vertical; min-height: 7rem; }
+
+/* A search box carries Safari's own rounded, inset look until it is told not
+   to; every other type arrives plain. */
+.field input[type=search], .stack input[type=search] {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* A <select> keeps the native arrow, which is a different shape, colour and
+   size on every platform and is the one part of the control a stylesheet cannot
+   reach. So: draw our own out of two triangles, in a token colour that follows
+   the theme, and leave room for it. Not on a multiple select, which has no
+   arrow to replace. */
+.field select:not([multiple]), .stack select:not([multiple]) {
+  /* Without this the native arrow stays and ours is drawn beside it, which
+     looks exactly like the bug it is: two carets. */
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  padding-right: 2.5rem;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  /* The two offsets differ by exactly the triangle width, so the halves meet on
+     one edge and read as a single caret rather than two smudged ones. */
+  background-position: right 1.3rem center, right 1rem center;
+  background-size: .3rem .3rem;
+  background-repeat: no-repeat;
+}
 .field .helptext, .stack .helptext {
   display: block;
   font-size: .875rem;
@@ -717,7 +755,7 @@ a.tag:hover { color: var(--ink-strong); }
 .field-check label { display: inline; font-weight: 400; }
 .field .req { color: var(--accent); }
 
-.has-error input, .has-error textarea { border-color: var(--danger-line); }
+.has-error :is(input, select, textarea) { border-color: var(--danger-line); }
 .field-error { color: var(--danger); font-size: .9rem; margin: 0 0 var(--s-2); }
 
 .form-actions { margin-top: var(--s-6); }
@@ -738,14 +776,16 @@ a.tag:hover { color: var(--ink-strong); }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .site-header, .panel, .callout, .program-card, .program-aside, .search,
   .theme-switch, .filters a, .categories a, .flash, .field input,
-  .field textarea { background: var(--pane-solid); }
+  .field select, .field textarea { background-color: var(--pane-solid); }
 }
 
 @media (prefers-reduced-transparency: reduce) {
   .site-header, .panel, .callout, .program-card, .program-aside, .search,
   .theme-switch, .filters a, .categories a, .flash, .field input,
-  .field textarea {
-    background: var(--pane-solid);
+  .field select, .field textarea {
+    /* background-color, not background: the select's arrow is a background
+       image and going opaque must not erase it. */
+    background-color: var(--pane-solid);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }

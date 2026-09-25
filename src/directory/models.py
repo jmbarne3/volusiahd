@@ -9,13 +9,17 @@ settled — programs describe their own affiliation in their own description.
 """
 
 import re
+import time
 
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import escape
 from django_prose_editor.fields import ProseEditorField
+
+from . import geocoding
 
 # A deliberately narrow toolbar. A full word-processor toolbar invites
 # inconsistent typography that then has to be cleaned up by hand across
@@ -203,12 +207,9 @@ class Program(SanitizedRichTextMixin, models.Model):
     email = models.EmailField(blank=True, help_text="The program's general contact address.")
     phone = models.CharField(max_length=32, blank=True)
 
-    locations = models.TextField(
-        "where they meet",
-        blank=True,
-        help_text="One address per line. A program that meets in several places gets "
-        "a line for each; a program that moves around can say so in words instead.",
-    )
+    # Where a program meets is `ProgramLocation`, edited inline below. It is a
+    # table rather than a text field because the next question families ask is
+    # "how far is that from me", and no amount of free text answers it.
 
     serves_grades = models.CharField(
         max_length=80,
@@ -318,13 +319,14 @@ class Program(SanitizedRichTextMixin, models.Model):
 
     @property
     def location_list(self):
-        """The addresses, one per line, with the blanks dropped.
+        """The addresses, as a family should read them.
 
         A program that meets in three places is the normal case, not the odd
-        one, so every template that shows a location loops over this rather
-        than assembling a single address out of parts.
+        one, so every template that shows a location loops over this rather than
+        assembling a single address out of parts. Callers that render this for
+        more than one program want `prefetch_related("locations")`.
         """
-        return [line.strip() for line in (self.locations or "").splitlines() if line.strip()]
+        return [location.display_name for location in self.locations.all()]
 
     @property
     def primary_location(self):
@@ -334,6 +336,232 @@ class Program(SanitizedRichTextMixin, models.Model):
 
     def mark_verified(self, on=None):
         self.last_verified_on = on or timezone.localdate()
+
+
+class LocationQuerySet(models.QuerySet):
+    def pending(self):
+        """The ones nothing has looked up yet — what a retry works through."""
+        return self.filter(status=self.model.Status.PENDING)
+
+    def mappable(self):
+        """The ones a distance search can actually use."""
+        return self.exclude(latitude=None).exclude(longitude=None)
+
+    def look_up(self, *, pause=0.0):
+        """Geocode these locations. Returns (resolved, missed, gave_up).
+
+        Never raises. A geocoder that is not answering ends the run early and
+        leaves the rest of the rows pending, because pending is exactly the
+        state the next attempt looks for — and because working through two
+        hundred addresses to collect two hundred identical failures is a way of
+        being rude to a free service.
+
+        `pause` is for batches. An editor saving three addresses is not bulk
+        use and should not be made to wait; `manage.py geocode` passes the
+        courtesy delay.
+        """
+        resolved = missed = 0
+        for index, location in enumerate(self):
+            if index and pause:
+                time.sleep(pause)
+            try:
+                place = geocoding.resolve(location.query)
+            except geocoding.GeocoderUnavailable:
+                return resolved, missed, True
+            location.apply(place)
+            location.save()
+            if place:
+                resolved += 1
+            else:
+                missed += 1
+        return resolved, missed, False
+
+
+class BaseLocation(models.Model):
+    """One place, as somebody wrote it and as it turned out to be.
+
+    Two names, deliberately. `query` is what was typed — "the Presbyterian
+    church on Ocean Ave" — and `label` is what the geocoder matched it to.
+    Keeping both is what lets a lookup be run again later without losing the
+    original wording, and what lets an editor see at a glance when a resolved
+    address is not the place anyone meant.
+
+    The coordinates are nullable and have to stay that way. An address that no
+    geocoder recognises is still an address worth publishing, and a program that
+    meets "at members' homes, term by term" has no point on a map at all.
+    Anything that searches by distance is therefore searching a subset of the
+    directory, and has to say so rather than quietly drop the rest.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Not looked up yet"
+        RESOLVED = "resolved", "Resolved to a point on the map"
+        FAILED = "failed", "No match found"
+
+    query = models.CharField(
+        "address as entered",
+        max_length=255,
+        help_text="One place. A street address resolves best, but a landmark or a "
+        "city works. Change this and the lookup runs again on save.",
+    )
+    label = models.CharField(
+        "resolved address",
+        max_length=255,
+        blank=True,
+        help_text="What the lookup matched, and what the site shows. Overwrite it if "
+        "the match is right but the wording is wrong.",
+    )
+
+    # FloatField rather than Decimal: what these feed is arithmetic — a haversine
+    # distance, computed in the database — and mixing Decimal with float inside a
+    # query expression is a reliable source of bugs that buys no accuracy. A
+    # double carries a degree to eleven decimal places, which is millimetres,
+    # against a street address that is ambiguous by several metres anyway.
+    latitude = models.FloatField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(-90), MaxValueValidator(90)],
+        help_text="Filled in by the lookup. Type one in yourself if you know better.",
+    )
+    longitude = models.FloatField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(-180), MaxValueValidator(180)],
+    )
+
+    # Kept separately from the label because "programs in Deltona" is a question
+    # answerable with an index, and pulling a city back out of a formatted
+    # address string is not.
+    city = models.CharField(max_length=80, blank=True)
+    postcode = models.CharField(max_length=16, blank=True)
+
+    # OpenStreetMap's own identifiers for the thing that matched. Not used yet;
+    # they are what would let two programs meeting at the same church be
+    # recognised as meeting at the same church.
+    osm_type = models.CharField(max_length=1, blank=True)
+    osm_id = models.BigIntegerField(null=True, blank=True)
+
+    status = models.CharField(max_length=10, choices=Status, default=Status.PENDING)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    sort_order = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Lower numbers first. The first one is what listings show.",
+    )
+
+    objects = LocationQuerySet.as_manager()
+
+    # Everything `apply()` and `forget_lookup()` write. Named once so that a
+    # save with `update_fields` cannot quietly drop half of a reset.
+    LOOKUP_FIELDS = [
+        "label",
+        "latitude",
+        "longitude",
+        "city",
+        "postcode",
+        "osm_type",
+        "osm_id",
+        "status",
+        "resolved_at",
+    ]
+
+    # Everything except which record it hangs off, for copying a place from a
+    # submission onto the program it becomes.
+    COPY_FIELDS = ["query", "sort_order", *LOOKUP_FIELDS]
+
+    class Meta:
+        abstract = True
+        ordering = ["sort_order", "pk"]
+
+    def __str__(self):
+        return self.display_name
+
+    def save(self, *args, **kwargs):
+        changed_query = self.query != getattr(self, "_loaded_query", self.query)
+        changed_point = (self.latitude, self.longitude) != getattr(
+            self, "_loaded_point", (self.latitude, self.longitude)
+        )
+        # A corrected address is a different address, and keeping the old
+        # coordinates against it would publish a program at a place it does not
+        # meet. Unless the same edit supplied new coordinates by hand, in which
+        # case the editor has already answered the question.
+        if changed_query and not changed_point:
+            self.forget_lookup()
+        # Coordinates typed in by hand resolve an address as surely as the
+        # geocoder would, and a row left pending would be overwritten by the
+        # next lookup.
+        elif self.status == self.Status.PENDING and self.has_point:
+            self.status = self.Status.RESOLVED
+
+        if (update_fields := kwargs.get("update_fields")) is not None:
+            kwargs["update_fields"] = {*update_fields, *self.LOOKUP_FIELDS}
+        result = super().save(*args, **kwargs)
+        self._loaded_query = self.query
+        self._loaded_point = (self.latitude, self.longitude)
+        return result
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        """Remember what was loaded, so `save()` can tell what an editor changed."""
+        instance = super().from_db(db, field_names, values)
+        instance._loaded_query = instance.query
+        instance._loaded_point = (instance.latitude, instance.longitude)
+        return instance
+
+    @property
+    def display_name(self):
+        """What a page shows: the resolved address, or the typed one if nothing resolved."""
+        return self.label or self.query
+
+    @property
+    def has_point(self):
+        return self.latitude is not None and self.longitude is not None
+
+    def apply(self, place):
+        """Record the outcome of a lookup. The caller saves.
+
+        A miss is recorded rather than ignored, because "we looked and found
+        nothing" and "nobody has looked" need different handling and look
+        identical in an empty coordinate column.
+        """
+        self.resolved_at = timezone.now()
+        if place is None:
+            self.status = self.Status.FAILED
+            return
+        self.label = place.label
+        self.latitude = place.latitude
+        self.longitude = place.longitude
+        self.city = place.city
+        self.postcode = place.postcode
+        self.osm_type = place.osm_type
+        self.osm_id = place.osm_id
+        self.status = self.Status.RESOLVED
+
+    def copied_values(self):
+        """This place as keyword arguments for the other kind of location row."""
+        return {field: getattr(self, field) for field in self.COPY_FIELDS}
+
+    def forget_lookup(self):
+        """Throw away what a previous lookup decided, without touching `query`."""
+        self.label = ""
+        self.latitude = self.longitude = None
+        self.city = self.postcode = self.osm_type = ""
+        self.osm_id = self.resolved_at = None
+        self.status = self.Status.PENDING
+
+
+class ProgramLocation(BaseLocation):
+    """Where a published program meets."""
+
+    program = models.ForeignKey(Program, related_name="locations", on_delete=models.CASCADE)
+
+    class Meta(BaseLocation.Meta):
+        verbose_name = "meeting place"
+        verbose_name_plural = "meeting places"
+        # For the distance search: a haversine is too expensive to run over every
+        # row, so the query will cut the field down to a box of latitudes and
+        # longitudes first and do the real arithmetic on what survives. This is
+        # the index that step reads.
+        indexes = [models.Index(fields=["latitude", "longitude"])]
 
 
 class ContactPerson(models.Model):
@@ -459,7 +687,9 @@ class Submission(models.Model):
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=32, blank=True)
 
-    locations = models.TextField("where they meet", blank=True)
+    # Where they meet is `SubmissionLocation`. The registration form resolves
+    # each address as it is typed, so what arrives is already a point on a map
+    # rather than a paragraph somebody has to interpret later.
 
     serves_grades = models.CharField(max_length=80, blank=True)
     age_min = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -518,6 +748,11 @@ class Submission(models.Model):
         """A record with no one-line description has nothing to show in a listing."""
         return bool(self.short_description.strip())
 
+    @property
+    def location_lines(self):
+        """The addresses, as the submitter left them."""
+        return [location.display_name for location in self.locations.all()]
+
     def description_as_html(self):
         """Plain text in, paragraphs out.
 
@@ -527,3 +762,21 @@ class Submission(models.Model):
         """
         blocks = [escape(block.strip()) for block in re.split(r"\n\s*\n", self.description or "")]
         return "".join(f"<p>{block}</p>" for block in blocks if block)
+
+
+class SubmissionLocation(BaseLocation):
+    """A place somebody named on one of the public forms.
+
+    The same shape as `ProgramLocation`, and usually already resolved: the form
+    is a search box, so what arrives is generally a place the submitter picked
+    off a list rather than a line of prose. That is the point of building it
+    that way — the person who knows where they meet is the person choosing which
+    match is right, and approving their submission copies the answer across
+    instead of guessing at it.
+    """
+
+    submission = models.ForeignKey(Submission, related_name="locations", on_delete=models.CASCADE)
+
+    class Meta(BaseLocation.Meta):
+        verbose_name = "place"
+        verbose_name_plural = "places they named"
