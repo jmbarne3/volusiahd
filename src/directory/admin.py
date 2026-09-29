@@ -29,6 +29,7 @@ from .models import (
     ProgramLocation,
     Submission,
     Tag,
+    TagGroup,
 )
 
 # She will never touch Groups. Site-wide permissions are not a thing we use.
@@ -144,7 +145,7 @@ class ProgramAdmin(ModelAdmin):
     ]
     list_display_links = ["name"]
     list_editable = ["status", "is_featured"]
-    list_filter = ["status", "category", "is_featured", "step_up_direct_pay"]
+    list_filter = ["status", "category", "is_featured", "step_up_direct_pay", "faith_basis"]
     list_per_page = 50
     search_fields = [
         "name",
@@ -172,7 +173,21 @@ class ProgramAdmin(ModelAdmin):
         (
             "Description",
             {
-                "fields": ["short_description", "description", "logo"],
+                "fields": [
+                    "short_description",
+                    "description",
+                    "highlights",
+                    "logo",
+                ],
+            },
+        ),
+        (
+            "Who runs it",
+            {
+                "fields": ["host_name", "class_names", "instructor_info", "faith_basis"],
+                "description": "A host name is only for a listing that is a class or a "
+                "team under a larger group. Faith affiliation may be left blank, which "
+                "publishes nothing either way.",
             },
         ),
         (
@@ -188,9 +203,36 @@ class ProgramAdmin(ModelAdmin):
             },
         ),
         (
-            "Practical details",
+            "When it meets",
             {
-                "fields": ["cost_notes", "meeting_schedule"],
+                "fields": [
+                    "meeting_days",
+                    ("meeting_time_start", "meeting_time_end"),
+                    ("season_start", "season_end"),
+                    "meeting_schedule",
+                ],
+                "description": "The days and dates are what a family filters by. "
+                "Anything the boxes cannot say goes in the last box.",
+            },
+        ),
+        (
+            "Enrolling",
+            {
+                "fields": [("enrollment_opens", "enrollment_closes"), "enrollment_notes"],
+            },
+        ),
+        (
+            "Cost",
+            {
+                "fields": ["cost_basis", "cost_notes"],
+            },
+        ),
+        (
+            "Reach",
+            {
+                "fields": ["delivery", "travels_to_student_home", "service_area"],
+                "description": "For programs that come to the family, or meet wherever "
+                "suits, rather than at a fixed address.",
             },
         ),
         (
@@ -346,6 +388,59 @@ class CategoryAdmin(ModelAdmin):
         return obj._tag_count
 
 
+class TagAnswerInline(TabularInline):
+    """The answers to a question, written on the question's own screen.
+
+    A question and its answers are one editorial act — "ability level means
+    beginner, intermediate, advanced" — and splitting them across two screens
+    would mean writing five tags and then remembering what they were for.
+    """
+
+    model = Tag
+    extra = 3
+    fields = ["name", "slug", "description"]
+    prepopulated_fields = {"slug": ["name"]}
+    verbose_name = "answer"
+    verbose_name_plural = "The answers to this question"
+
+
+@admin.register(TagGroup)
+class TagGroupAdmin(ModelAdmin):
+    """The questions whose answers are tags.
+
+    What this screen does not decide is who gets asked. A heading asks a question
+    when it offers one of the answers, which is set under Categories — so an
+    answer written here appears on no form until somebody offers it to a heading.
+    That is the one thing about this screen worth remembering, and the column
+    below says it out loud.
+    """
+
+    inlines = [TagAnswerInline]
+    prepopulated_fields = {"slug": ["name"]}
+    list_display = ["name", "answer_count", "offered_count", "allows_several", "sort_order"]
+    list_editable = ["sort_order"]
+    search_fields = ["name"]
+    fields = ["name", "slug", "prompt", "allows_several", "sort_order"]
+
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .annotate(_answer_count=Count("tags", distinct=True))
+            .annotate(_offered_count=Count("tags__categories", distinct=True))
+        )
+
+    @display(description="Answers", ordering="_answer_count")
+    def answer_count(self, obj):
+        return obj._answer_count
+
+    @display(description="Asked of")
+    def offered_count(self, obj):
+        if not obj._offered_count:
+            return format_html('<span style="color:#b45309">no headings yet</span>')
+        return f"{obj._offered_count} heading{'s' if obj._offered_count != 1 else ''}"
+
+
 @admin.register(Tag)
 class TagAdmin(ModelAdmin):
     """Deliberately plain. The work here is vocabulary discipline, not features:
@@ -354,19 +449,25 @@ class TagAdmin(ModelAdmin):
     "Offered under" is shown but not edited here — see `CategoryAdmin`. A tag
     with nothing in that column still works; it is simply one we apply
     ourselves rather than one a registrant can pick.
+
+    A tag with a question beside it is an answer to that question rather than a
+    subject: it renders as a radio button or a checkbox on the registration form
+    instead of joining the searchable list. `TagGroupAdmin` is the better screen
+    for writing those.
     """
 
     prepopulated_fields = {"slug": ["name"]}
-    list_display = ["name", "offered_under", "program_count", "slug"]
+    list_display = ["name", "group", "offered_under", "program_count", "slug"]
     list_per_page = 100
     search_fields = ["name"]
-    list_filter = ["categories"]
-    fields = ["name", "slug", "description"]
+    list_filter = ["categories", "group"]
+    fields = ["name", "slug", "description", "group"]
 
     def get_queryset(self, request):
         return (
             super()
             .get_queryset(request)
+            .select_related("group")
             .prefetch_related("categories")
             .annotate(_program_count=Count("programs", distinct=True))
         )
@@ -421,24 +522,18 @@ class SubmissionAdmin(ModelAdmin):
 
     # Everything the public typed is a record of what they said, not something
     # we edit. Corrections happen on the Program after approval.
+    #
+    # The shared fields are spread in from the model rather than typed out, so a
+    # question added to the registration form cannot arrive here as an editable
+    # box nobody meant to offer — or, worse, silently not arrive at all.
     readonly_fields = [
         "kind",
         "program_name",
         "short_description",
         "description",
-        "website",
-        "facebook",
-        "email",
-        "phone",
+        *Submission.shared_field_names(),
+        "days_display",
         "places_display",
-        "serves_grades",
-        "age_min",
-        "age_max",
-        "cost_notes",
-        "meeting_schedule",
-        "step_up_direct_pay",
-        "step_up_pep",
-        "step_up_fes_ua",
         "logo_preview",
         "submitter_name",
         "submitter_email",
@@ -455,12 +550,16 @@ class SubmissionAdmin(ModelAdmin):
                 "fields": [
                     "kind",
                     "program_name",
+                    "host_name",
                     "short_description",
                     "description",
+                    "highlights",
                     "category",
                     "tags",
                     "logo_preview",
-                ]
+                ],
+                "description": "Category and tags are the two things worth correcting "
+                "before approval. Everything else is what they wrote.",
             },
         ),
         (
@@ -468,16 +567,42 @@ class SubmissionAdmin(ModelAdmin):
             {"fields": ["website", "facebook", "email", "phone", "places_display"]},
         ),
         (
-            "Who it serves and when",
+            "Who teaches, and for whom",
             {
                 "fields": [
+                    "class_names",
+                    "instructor_info",
+                    "faith_basis",
                     "serves_grades",
                     ("age_min", "age_max"),
+                ]
+            },
+        ),
+        (
+            "When",
+            {
+                "fields": [
+                    "days_display",
+                    ("meeting_time_start", "meeting_time_end"),
+                    ("season_start", "season_end"),
                     "meeting_schedule",
+                    ("enrollment_opens", "enrollment_closes"),
+                    "enrollment_notes",
+                ]
+            },
+        ),
+        (
+            "Cost and reach",
+            {
+                "fields": [
+                    "cost_basis",
                     "cost_notes",
                     "step_up_direct_pay",
                     "step_up_pep",
                     "step_up_fes_ua",
+                    "delivery",
+                    "travels_to_student_home",
+                    "service_area",
                 ]
             },
         ),
@@ -506,6 +631,11 @@ class SubmissionAdmin(ModelAdmin):
     @display(description="Kind", ordering="kind", label=True)
     def kind_display(self, obj):
         return obj.get_kind_display().split(" — ")[0]
+
+    @display(description="Days they meet")
+    def days_display(self, obj):
+        """The stored value is "tue,thu", which is not a thing to show anybody."""
+        return obj.meeting_days_display or "—"
 
     @display(description="Where they meet")
     def places_display(self, obj):
@@ -601,6 +731,12 @@ def build_program_from(submission, status):
     in and this does not carry across becomes something she retypes by hand.
     """
     program = Program(
+        # Everything the two models hold identically, copied in one go rather
+        # than named twice. A field added to `SharedProgramFields` arrives here
+        # without anybody remembering to add it, which is the whole reason that
+        # base class exists — a question a registrant answered and we then failed
+        # to carry across is a question she has to ask them again.
+        **submission.shared_values(),
         name=submission.program_name,
         slug=_unique_slug(submission.program_name),
         short_description=(
@@ -608,18 +744,6 @@ def build_program_from(submission, status):
         ),
         category=submission.category,
         description=submission.description_as_html(),
-        website=submission.website,
-        facebook=submission.facebook,
-        email=submission.email,
-        phone=submission.phone,
-        serves_grades=submission.serves_grades,
-        age_min=submission.age_min,
-        age_max=submission.age_max,
-        cost_notes=submission.cost_notes,
-        meeting_schedule=submission.meeting_schedule,
-        step_up_direct_pay=submission.step_up_direct_pay,
-        step_up_pep=submission.step_up_pep,
-        step_up_fes_ua=submission.step_up_fes_ua,
         status=status,
         # The provider described it today, so today is when it was last verified.
         last_verified_on=timezone.localdate(),

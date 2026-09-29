@@ -29,16 +29,22 @@ from django.urls import reverse
 from PIL import Image
 
 from . import geocoding
+from . import questions as q
 from .addresses import DEBOUNCE_MS, MIN_QUERY_CHARS, LocationsField
 from .models import (
+    WEEKDAY_NAMES,
     Category,
     ContactPerson,
     Page,
     Program,
     ProgramLocation,
+    SharedProgramFields,
     Submission,
     SubmissionLocation,
     Tag,
+    TagGroup,
+    join_weekdays,
+    split_weekdays,
 )
 from .templatetags.directory_extras import CATEGORY_COLOUR_COUNT, colour_code
 
@@ -536,7 +542,9 @@ class RegistrationTests(TestCase):
         clubs = Category.objects.create(name="Clubs", slug="clubs")
         self._tag("Lego", "lego", self.category, clubs)
         response = self.client.get(reverse("directory:register"))
-        headings = " ".join(str(pk) for pk in sorted([self.category.pk, clubs.pk]))
+        # Slugs, not primary keys: the same script reads `data-asked-by`, which
+        # comes from `questions.py` and can only speak in slugs.
+        headings = " ".join(sorted([self.category.slug, clubs.slug]))
         self.assertContains(response, f'data-categories="{headings}"')
 
     def test_a_tag_that_does_not_go_with_the_chosen_heading_is_refused(self):
@@ -1775,3 +1783,688 @@ def tearDownModule():
         root = cls._overridden_settings.get("MEDIA_ROOT")
         if root:
             shutil.rmtree(root, ignore_errors=True)
+
+
+class QuestionMapTests(TestCase):
+    """The map from a field to the headings that ask about it.
+
+    A `TestCase` rather than a `SimpleTestCase` because the last of these builds
+    the real form, and the form reads the tag questions out of the database.
+
+    Everything here is a typo that would otherwise go unnoticed. A field name
+    misspelled in `ASKED_BY` scopes nothing and shows that question to everybody;
+    a heading slug misspelled scopes it to nobody and hides the question from
+    everybody. Both look like a design decision from the outside.
+    """
+
+    def test_every_heading_named_in_the_map_is_a_real_heading(self):
+        for field, headings in q.ASKED_BY.items():
+            with self.subTest(field=field):
+                self.assertEqual(headings - q.EVERY, set())
+
+    def test_every_required_field_is_a_field_somebody_is_asked(self):
+        self.assertEqual(q.REQUIRED - set(q.ASKED_BY), set())
+
+    def test_every_field_in_the_map_is_a_field_on_the_registration_form(self):
+        """The check that catches a renamed model field.
+
+        `questions.py` scopes by field name, and a name that no longer matches a
+        field is silently ignored — the question comes back unscoped and every
+        heading is asked it again.
+        """
+        from .forms import ProgramRegistrationForm
+
+        self.assertEqual(set(q.ASKED_BY) - set(ProgramRegistrationForm().fields), set())
+
+    def test_an_unknown_heading_is_asked_the_questions_everybody_is_asked(self):
+        """What a heading she adds in the admin tomorrow gets.
+
+        Not nothing: a heading with no entry here has to produce a usable form on
+        the day it is created, and be tailored later or never.
+        """
+        self.assertEqual(q.fields_for("something-she-invented"), q.CORE)
+        self.assertIn("program_name", q.fields_for(None))
+
+    def test_a_heading_is_only_required_to_answer_what_it_is_asked(self):
+        self.assertIn("serves_grades", q.required_for(q.CO_OPS))
+        # A parent support group serves the adults, so it is never asked.
+        self.assertNotIn("serves_grades", q.fields_for(q.PARENT_SUPPORT))
+        self.assertNotIn("serves_grades", q.required_for(q.PARENT_SUPPORT))
+        self.assertIn("program_name", q.required_for(q.PARENT_SUPPORT))
+
+
+class SharedFieldTests(TestCase):
+    """The two models mirror each other, and the mirror is checked rather than trusted."""
+
+    def test_both_models_hold_every_shared_field(self):
+        names = SharedProgramFields.shared_field_names()
+        self.assertGreater(len(names), 20)
+        for name in names:
+            with self.subTest(field=name):
+                Program._meta.get_field(name)
+                Submission._meta.get_field(name)
+
+    def test_approval_carries_every_shared_field_across(self):
+        """The test that makes the shared base worth having.
+
+        A field a registrant fills in and approval drops is a field she retypes
+        by hand, and nothing would tell her it happened. Rather than listing what
+        to check, this fills every shared field with something distinguishable
+        from its default and asserts the published program matches.
+        """
+        from .admin import build_program_from
+
+        submission = Submission.objects.create(
+            program_name="Everything Co-op",
+            short_description="One line.",
+            host_name="Mainland Fellowship",
+            class_names="Algebra I, Latin",
+            instructor_info="Two teachers, both certified.",
+            highlights="Small classes.",
+            faith_basis=Submission.Faith.FAITH_BASED,
+            website="https://example.org",
+            facebook="https://facebook.com/groups/x",
+            email="hi@example.org",
+            phone="386-555-0000",
+            serves_grades="K-8",
+            age_min=5,
+            age_max=14,
+            meeting_days="tue,thu",
+            meeting_time_start="09:00",
+            meeting_time_end="12:00",
+            season_start="2026-09-01",
+            season_end="2027-05-20",
+            meeting_schedule="Alternate Fridays too.",
+            enrollment_opens="2026-06-01",
+            enrollment_closes="2026-08-15",
+            enrollment_notes="Rolling after that.",
+            cost_basis=Submission.Cost.PAID,
+            cost_notes="$45 a semester.",
+            step_up_direct_pay=True,
+            step_up_pep=True,
+            step_up_fes_ua=True,
+            delivery=Submission.Delivery.HYBRID,
+            travels_to_student_home=True,
+            service_area="West Volusia.",
+        )
+        submission.refresh_from_db()
+
+        program = build_program_from(submission, Program.Status.PUBLISHED)
+        program.refresh_from_db()
+
+        for name in SharedProgramFields.shared_field_names():
+            with self.subTest(field=name):
+                expected = getattr(submission, name)
+                self.assertEqual(getattr(program, name), expected)
+                # And the value was actually worth copying, so a base class that
+                # copied nothing at all could not pass this.
+                self.assertNotIn(expected, ["", None])
+
+
+class WeekdayFieldTests(TestCase):
+    """Days of the week, stored as text and filtered by substring."""
+
+    def test_no_day_code_is_a_substring_of_another(self):
+        """The whole reason `meeting_days__contains` is safe.
+
+        If a code ever became a prefix of another one, every filter in
+        `meeting_on` would start returning the wrong programs and nothing else
+        here would fail.
+        """
+        codes = list(WEEKDAY_NAMES)
+        for code in codes:
+            for other in codes:
+                if code != other:
+                    self.assertNotIn(code, other)
+
+    def test_days_are_stored_in_week_order_however_they_were_ticked(self):
+        self.assertEqual(join_weekdays(["thu", "mon", "sat"]), "mon,thu,sat")
+        self.assertEqual(join_weekdays("sun,tue"), "tue,sun")
+
+    def test_anything_that_is_not_a_day_is_dropped_rather_than_stored(self):
+        """A garbled value should mean "we do not know", not a 500 on a page."""
+        self.assertEqual(split_weekdays("mon,notaday,wed"), ["mon", "wed"])
+        self.assertEqual(split_weekdays(None), [])
+        self.assertEqual(split_weekdays("<script>"), [])
+
+    def test_a_list_assigned_straight_onto_a_program_is_normalised_on_save(self):
+        program = Program.objects.create(
+            name="Shell", slug="shell", short_description="x", meeting_days=["fri", "mon"]
+        )
+        program.refresh_from_db()
+        self.assertEqual(program.meeting_days, "mon,fri")
+
+    def test_filtering_by_a_day_finds_only_the_programs_meeting_on_it(self):
+        thursday = Program.objects.create(
+            name="Thursday", slug="thu", short_description="x", meeting_days="thu"
+        )
+        Program.objects.create(
+            name="Tuesday", slug="tue", short_description="x", meeting_days="tue"
+        )
+        self.assertEqual(list(Program.objects.meeting_on("thu")), [thursday])
+        # Nothing to narrow by is not the same as nothing matching.
+        self.assertEqual(Program.objects.meeting_on("").count(), 2)
+        self.assertEqual(Program.objects.meeting_on("funday").count(), 2)
+
+    def test_the_days_read_as_a_sentence(self):
+        program = Program(meeting_days="tue,thu")
+        self.assertEqual(program.meeting_days_display, "Tuesdays and Thursdays")
+        self.assertEqual(
+            Program(meeting_days="mon,wed,fri").meeting_days_display,
+            "Mondays, Wednesdays and Fridays",
+        )
+
+
+class DisplayTests(SimpleTestCase):
+    """What a program page actually prints, for the answers assembled from parts."""
+
+    def test_a_time_reads_as_somebody_would_say_it(self):
+        import datetime
+
+        program = Program(
+            meeting_time_start=datetime.time(9, 0), meeting_time_end=datetime.time(12, 0)
+        )
+        self.assertEqual(program.meeting_time_display, "9 a.m. to noon")
+        self.assertEqual(
+            Program(meeting_time_start=datetime.time(13, 30)).meeting_time_display,
+            "from 1:30 p.m.",
+        )
+
+    def test_a_season_reads_as_months_when_both_ends_are_known(self):
+        import datetime
+
+        program = Program(
+            season_start=datetime.date(2026, 9, 2), season_end=datetime.date(2027, 5, 20)
+        )
+        self.assertEqual(program.season_display, "September through May")
+        self.assertEqual(
+            Program(season_start=datetime.date(2026, 9, 2)).season_display, "from September 2"
+        )
+
+    def test_cost_says_the_headline_and_the_detail_without_saying_either_twice(self):
+        self.assertEqual(
+            Program(cost_basis="paid", cost_notes="$45 a semester").cost_display,
+            "There is a cost — $45 a semester",
+        )
+        self.assertEqual(Program(cost_basis="free").cost_display, "Free")
+        # The note already says it; the headline would be noise.
+        self.assertEqual(
+            Program(cost_basis="free", cost_notes="Free, but bring a snack").cost_display,
+            "Free, but bring a snack",
+        )
+
+    def test_when_nothing_about_the_schedule_is_known_nothing_is_printed(self):
+        self.assertEqual(Program().when_display, "")
+        self.assertEqual(Program().enrollment_display, "")
+        self.assertEqual(Program().cost_display, "")
+
+
+class ScopedFormTests(TestCase):
+    """One form, thirteen shapes. The heading decides which questions count.
+
+    The rule being guarded is that the server decides what it asked about. The
+    script narrows the form for the person filling it in, but a direct post — or a
+    browser with no script — has to land in the same place, and the way it lands
+    matters: an answer to a question this heading is not asked is dropped quietly,
+    because somebody who changed their mind about the heading has not done
+    anything wrong.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.co_ops = Category.objects.create(name="Co-ops", slug=q.CO_OPS)
+        cls.tutoring = Category.objects.create(name="Tutoring", slug=q.TUTORING)
+        cls.parents = Category.objects.create(name="Parent support", slug=q.PARENT_SUPPORT)
+
+    def _payload(self, **overrides):
+        return {
+            "program_name": "Coastal Co-op",
+            "short_description": "A Thursday co-op in Ormond Beach.",
+            "description": "We meet weekly.",
+            "category": str(self.co_ops.pk),
+            "email": "hello@coastal.example.org",
+            "locations": "12 Ocean Ave, Ormond Beach 32176",
+            "serves_grades": "K-8",
+            "submitter_name": "Dana Reed",
+            "submitter_email": "dana@coastal.example.org",
+            "is_authorized": "on",
+            "website_url": "",
+            **overrides,
+        }
+
+    def _submit(self, **overrides):
+        response = self.client.post(reverse("directory:register"), self._payload(**overrides))
+        self.assertRedirects(response, reverse("directory:register_thanks"))
+        return Submission.objects.get()
+
+    def test_an_answer_this_heading_is_asked_for_is_kept(self):
+        submission = self._submit(faith_basis="faith", meeting_days=["tue", "thu"])
+        self.assertEqual(submission.faith_basis, "faith")
+        self.assertEqual(submission.meeting_days, "tue,thu")
+
+    def test_an_answer_to_a_question_this_heading_is_not_asked_is_dropped(self):
+        """Dropped, not refused.
+
+        Tutoring is never asked about faith affiliation or enrollment windows. A
+        post carrying them is somebody who filled in the co-op version of this
+        form and then changed the heading, and rejecting it would be the form
+        blaming them for our own narrowing.
+        """
+        submission = self._submit(
+            category=str(self.tutoring.pk),
+            faith_basis="faith",
+            enrollment_notes="Rolling",
+            host_name="Somebody Else",
+        )
+        self.assertEqual(submission.faith_basis, "")
+        self.assertEqual(submission.enrollment_notes, "")
+        self.assertEqual(submission.host_name, "")
+        # And the questions tutoring *is* asked still work.
+        self.assertEqual(submission.serves_grades, "K-8")
+
+    def test_a_boolean_nobody_was_asked_about_comes_back_false(self):
+        submission = self._submit(
+            category=str(self.parents.pk), serves_grades="", step_up_direct_pay="on"
+        )
+        self.assertFalse(submission.step_up_direct_pay)
+
+    def test_nothing_is_dropped_when_no_heading_was_chosen(self):
+        """With no heading we have no basis for deciding a question was not asked.
+
+        Narrowing on the strength of an unanswered question would throw away work
+        somebody had already done.
+        """
+        submission = self._submit(category="", faith_basis="secular", host_name="A Host")
+        self.assertEqual(submission.faith_basis, "secular")
+        self.assertEqual(submission.host_name, "A Host")
+
+    def test_grades_are_required_of_a_heading_that_is_asked_for_them(self):
+        response = self.client.post(reverse("directory:register"), self._payload(serves_grades=""))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Submission.objects.count(), 0)
+
+    def test_grades_are_not_required_of_a_heading_that_is_never_asked(self):
+        submission = self._submit(category=str(self.parents.pk), serves_grades="")
+        self.assertEqual(submission.serves_grades, "")
+
+    def test_grades_are_still_required_when_no_heading_was_chosen(self):
+        response = self.client.post(
+            reverse("directory:register"), self._payload(category="", serves_grades="")
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Submission.objects.count(), 0)
+
+    def test_a_scoped_question_says_which_headings_ask_it(self):
+        """What the script narrows the form with.
+
+        If this attribute stops being rendered the form silently stops narrowing
+        and everybody is asked all forty questions, which is the failure that
+        looks like a design decision.
+        """
+        response = self.client.get(reverse("directory:register"))
+        self.assertContains(response, 'data-asked-by="')
+        page = response.content.decode()
+        # Faith affiliation is asked of co-ops and not of tutoring.
+        start = page.index('name="faith_basis"')
+        attribute = page[start : page.index(">", start)]
+        self.assertIn(q.CO_OPS, attribute)
+        self.assertNotIn(q.TUTORING, attribute)
+
+    def test_a_question_everybody_is_asked_carries_no_scope(self):
+        """An unscoped field is one the script never touches, and that is the point.
+
+        Marking a universal question with all thirteen slugs would be thirteen
+        slugs of markup saying nothing, on every one of them.
+        """
+        page = self.client.get(reverse("directory:register")).content.decode()
+        start = page.index('name="short_description"')
+        self.assertNotIn("data-asked-by", page[start : page.index(">", start)])
+
+    def test_the_heading_dropdown_carries_each_slug(self):
+        """The one thing the script needs that the value does not give it."""
+        page = self.client.get(reverse("directory:register")).content.decode()
+        self.assertIn(f'data-slug="{q.CO_OPS}"', page)
+
+
+class TagQuestionTests(TestCase):
+    """The questions whose answers are tags."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.sports = Category.objects.create(name="Sports", slug=q.SPORTS)
+        cls.tutoring = Category.objects.create(name="Tutoring", slug=q.TUTORING)
+        cls.ability = TagGroup.objects.create(
+            name="Ability level", slug="ability-level", allows_several=True
+        )
+        cls.beginner = Tag.objects.create(name="Beginner", slug="beginner", group=cls.ability)
+        cls.varsity = Tag.objects.create(name="Varsity", slug="varsity", group=cls.ability)
+        cls.sports.tags.add(cls.beginner, cls.varsity)
+        cls.subject = Tag.objects.create(name="Soccer", slug="soccer")
+        cls.sports.tags.add(cls.subject)
+
+    def _payload(self, **overrides):
+        return {
+            "program_name": "Coastal United",
+            "short_description": "Youth soccer in Ormond Beach.",
+            "description": "We play on Saturdays.",
+            "category": str(self.sports.pk),
+            "email": "hello@coastal.example.org",
+            "locations": "12 Ocean Ave, Ormond Beach 32176",
+            "serves_grades": "K-12",
+            "submitter_name": "Dana Reed",
+            "submitter_email": "dana@coastal.example.org",
+            "is_authorized": "on",
+            "website_url": "",
+            **overrides,
+        }
+
+    def test_an_answer_is_stored_as_a_tag_like_any_other(self):
+        """No column, no second place to look.
+
+        The payoff of answering a type-specific question with a tag: the program
+        page, the tag page and every filter treat "Varsity" exactly as they treat
+        "Soccer", and the type-specific question needed no code of its own.
+        """
+        response = self.client.post(
+            reverse("directory:register"),
+            self._payload(question_ability_level=[str(self.varsity.pk)]),
+        )
+        self.assertRedirects(response, reverse("directory:register_thanks"))
+        submission = Submission.objects.get()
+        self.assertEqual([tag.name for tag in submission.tags.all()], ["Varsity"])
+
+    def test_an_answer_the_chosen_heading_is_not_offered_is_dropped(self):
+        submission_count = Submission.objects.count()
+        self.client.post(
+            reverse("directory:register"),
+            self._payload(
+                category=str(self.tutoring.pk),
+                question_ability_level=[str(self.varsity.pk)],
+            ),
+        )
+        self.assertEqual(Submission.objects.count(), submission_count + 1)
+        self.assertEqual(list(Submission.objects.get().tags.all()), [])
+
+    def test_the_answers_are_offered_alongside_the_subject_tags_not_inside_them(self):
+        """Two controls, because they are two different kinds of question.
+
+        A fixed set of answers belongs in radio buttons; an open vocabulary of
+        hundreds belongs in a search box. Leaving the answers in the subject list
+        as well would offer the same tag twice on one page.
+        """
+        page = self.client.get(reverse("directory:register")).content.decode()
+        opens = page.index('name="tags"')
+        tag_select = page[opens : page.index("</select>", opens)]
+        self.assertIn("Soccer", tag_select)
+        self.assertNotIn("Varsity", tag_select)
+        self.assertIn("data-answer-field", page)
+
+    def test_a_question_nobody_is_offered_an_answer_to_is_not_rendered(self):
+        """A question with no answers on offer anywhere is not a question."""
+        unused = TagGroup.objects.create(name="Unused", slug="unused")
+        Tag.objects.create(name="Nobody offers this", slug="nobody", group=unused)
+        page = self.client.get(reverse("directory:register")).content.decode()
+        self.assertNotIn("question_unused", page)
+
+    def test_a_program_page_lists_an_answer_against_its_question(self):
+        """"Varsity" on its own does not say what it is an answer to."""
+        program = Program.objects.create(
+            name="Coastal United",
+            slug="coastal-united",
+            short_description="Youth soccer.",
+            status=Program.Status.PUBLISHED,
+            category=self.sports,
+        )
+        program.tags.set([self.varsity, self.subject])
+        response = self.client.get(program.get_absolute_url())
+        self.assertContains(response, "Ability level")
+        # The subject tag is still a chip, because it reads on its own.
+        self.assertContains(response, "tag-chip")
+
+
+class ListingFilterTests(TestCase):
+    """Narrowing a listing. Every filter is a link somebody can send to a friend."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.category = Category.objects.create(name="Sports", slug=q.SPORTS)
+        cls.varsity = Tag.objects.create(name="Varsity", slug="varsity")
+        cls.saturday_tag = Tag.objects.create(name="Soccer", slug="soccer")
+
+        cls.thursday = cls._program(
+            "Thursday Club", "thursday", meeting_days="thu", age_min=10, age_max=14
+        )
+        cls.saturday = cls._program(
+            "Saturday League",
+            "saturday",
+            meeting_days="sat",
+            faith_basis=Program.Faith.FAITH_BASED,
+            delivery=Program.Delivery.HYBRID,
+            step_up_direct_pay=True,
+        )
+        cls.saturday.tags.set([cls.varsity, cls.saturday_tag])
+        cls.anytime = cls._program("No Idea", "no-idea")
+
+    @classmethod
+    def _program(cls, name, slug, **fields):
+        return Program.objects.create(
+            name=name,
+            slug=slug,
+            short_description=f"{name} in Volusia County.",
+            status=Program.Status.PUBLISHED,
+            category=cls.category,
+            **fields,
+        )
+
+    def _names(self, **params):
+        response = self.client.get(reverse("directory:program_list"), params)
+        self.assertEqual(response.status_code, 200)
+        return sorted(program.name for program in response.context["programs"])
+
+    def test_filtering_by_day(self):
+        self.assertEqual(self._names(day="thu"), ["Thursday Club"])
+
+    def test_filtering_by_faith_affiliation(self):
+        self.assertEqual(self._names(faith="faith"), ["Saturday League"])
+
+    def test_filtering_by_online_availability(self):
+        self.assertEqual(self._names(online="1"), ["Saturday League"])
+
+    def test_filtering_by_direct_pay(self):
+        self.assertEqual(self._names(directpay="1"), ["Saturday League"])
+
+    def test_an_age_filter_keeps_the_programs_that_never_said(self):
+        """An unknown bound has to widen the answer, not narrow it.
+
+        Dropping every program that left its age range blank would hide most of
+        the directory behind the filter most likely to be used.
+        """
+        self.assertEqual(
+            self._names(age="12"), ["No Idea", "Saturday League", "Thursday Club"]
+        )
+        # Outside the one range we know about, that program drops out and the
+        # ones that never said still stand.
+        self.assertEqual(self._names(age="3"), ["No Idea", "Saturday League"])
+
+    def test_each_tag_narrows_the_list_rather_than_widening_it(self):
+        """Two tags means both, not either.
+
+        `tags__slug__in` would have made "varsity and Saturdays" return every
+        varsity programme in the county, which is the opposite of what adding a
+        filter is for.
+        """
+        self.assertEqual(self._names(tag=["varsity"]), ["Saturday League"])
+        self.assertEqual(self._names(tag=["varsity", "soccer"]), ["Saturday League"])
+        self.assertEqual(self._names(tag=["varsity", "nonexistent"]), [])
+
+    def test_nothing_in_the_query_string_narrows_nothing(self):
+        self.assertEqual(len(self._names()), 3)
+        self.assertEqual(len(self._names(day="", faith="", age="")), 3)
+
+    def test_the_filters_are_shown_back_so_somebody_can_see_what_is_applied(self):
+        response = self.client.get(reverse("directory:program_list"), {"day": "thu", "online": "1"})
+        self.assertEqual(response.context["filters"]["day"], "thu")
+        self.assertTrue(response.context["filters"]["online"])
+        self.assertTrue(response.context["filters_active"])
+        self.assertContains(response, "Clear")
+
+    def test_the_same_filters_work_on_a_category_page(self):
+        response = self.client.get(self.category.get_absolute_url(), {"day": "sat"})
+        self.assertEqual(
+            [program.name for program in response.context["programs"]], ["Saturday League"]
+        )
+
+    def test_the_same_filters_work_on_a_tag_page(self):
+        response = self.client.get(self.varsity.get_absolute_url(), {"day": "thu"})
+        self.assertEqual(list(response.context["programs"]), [])
+
+
+class ScopedFormAssetTests(SimpleTestCase):
+    """The contract between the form, the stylesheet and the script.
+
+    Three files have to agree on a handful of attribute names, and none of them
+    can see the other two. Every failure this catches is silent: the script stops
+    finding what it narrows, or the stylesheet stops honouring what the script
+    hides, and the page looks exactly like a page where the feature was never
+    built.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        static = settings.BASE_DIR / "src" / "static"
+        cls.css = (static / "css" / "site.css").read_text()
+        cls.js = (static / "js" / "register-form.js").read_text()
+        cls.template = (
+            settings.BASE_DIR / "src" / "templates" / "directory" / "register.html"
+        ).read_text()
+
+    def test_the_script_and_the_page_agree_on_what_the_script_looks_for(self):
+        for hook in ["data-scoped-form", "data-asked-by", "data-categories", "data-slug"]:
+            with self.subTest(hook=hook):
+                self.assertIn(hook, self.js)
+        self.assertIn("data-scoped-form", self.template)
+        self.assertIn("register-form.js", self.template)
+
+    def test_the_answer_rows_are_marked_for_the_script(self):
+        """`is_answer=True` is what puts `data-answer-field` in the markup."""
+        self.assertIn("data-answer-field", self.js)
+        self.assertIn("is_answer=True", self.template)
+        field_tag = (
+            settings.BASE_DIR / "src" / "templates" / "directory" / "_field.html"
+        ).read_text()
+        self.assertIn("data-answer-field", field_tag)
+
+    def test_the_stylesheet_honours_the_hidden_attribute_the_script_sets(self):
+        """A `display` in a stylesheet beats the user agent's rule for `[hidden]`.
+
+        Every selector that sets a display on one of these has to say `display:
+        none` for the hidden case as well, or the script hides a question and the
+        question stays on screen.
+        """
+        for selector in [".field[hidden]", "fieldset[hidden]"]:
+            with self.subTest(selector=selector):
+                self.assertIn(selector, self.css)
+        # The answer rows set `display: flex` on their labels, so those need it too.
+        self.assertIn("label[hidden]", self.css)
+
+    def test_a_group_of_checkboxes_is_styled_even_though_django_gives_it_no_class(self):
+        self.assertIn(":has(input:is([type=checkbox], [type=radio]))", self.css)
+
+
+class ListingFilterStyleTests(TestCase):
+    """The filter row is a form control block, and has to be dressed like one.
+
+    It was not, and the way it failed is worth writing down. The row was put
+    inside `.search`, which is a pill with a pane behind it, hides its own label
+    on purpose, and strips the border off any input within it — all correct for
+    one row and all wrong underneath it. The result was native operating-system
+    dropdowns, an invisible number box and three labels somewhere off the left of
+    the screen, none of which any test noticed.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.css = (settings.BASE_DIR / "src" / "static" / "css" / "site.css").read_text()
+
+    def test_the_search_pill_holds_only_the_box_and_its_button(self):
+        """Anything else in there gets styling written for one row of one control."""
+        Category.objects.create(name="Co-ops", slug=q.CO_OPS)
+        page = self.client.get(reverse("directory:program_list")).content.decode()
+        start = page.index('<div class="search">')
+        pill = page[start : page.index("</div>", start)]
+        self.assertIn('type="search"', pill)
+        for stray in ["<select", 'type="number"', 'type="checkbox"']:
+            with self.subTest(stray=stray):
+                self.assertNotIn(stray, pill)
+
+    def test_the_filter_controls_are_covered_by_the_shared_recipe(self):
+        """The recipe is written by exception so a new control is dressed by default.
+
+        That only works for the wrappers it names, and it named `.field` and
+        `.stack`. A control in any other wrapper renders in the browser's own
+        style beside fields in ours, and every test still passes.
+        """
+        start = self.css.index(".field :is(input, select, textarea):not(")
+        selector = self.css[start : self.css.index("{", start)]
+        self.assertIn(".refine :is(input, select, textarea)", selector)
+
+    def test_the_filter_dropdowns_draw_the_same_caret_as_every_other_dropdown(self):
+        start = self.css.index(".field select:not([multiple])")
+        selector = self.css[start : self.css.index("{", start)]
+        self.assertIn(".refine select:not([multiple])", selector)
+
+    def test_a_filter_dropdown_keeps_room_for_the_caret_it_draws(self):
+        """The row shortens these controls, and a `padding` shorthand would put
+        the longest option name straight underneath the arrow."""
+        start = self.css.index(".refine select:not([multiple]) {")
+        rule = self.css[start : self.css.index("}", start)]
+        self.assertIn("2.5rem", rule)
+
+
+class SeedTaxonomyTests(TestCase):
+    """The command that makes an empty database usable."""
+
+    def test_it_creates_every_heading_the_question_map_expects(self):
+        """The two halves of the same contract, in two files.
+
+        `questions.py` scopes questions to slugs; this command is what makes those
+        slugs exist. A slug in one and not the other means a question asked of
+        nobody, or a heading asked only the core questions and nobody noticing.
+        """
+        call_command("seed_taxonomy", stdout=StringIO())
+        self.assertEqual(set(Category.objects.values_list("slug", flat=True)), set(q.EVERY))
+
+    def test_it_creates_the_questions_with_their_answers_attached(self):
+        call_command("seed_taxonomy", stdout=StringIO())
+        ability = TagGroup.objects.get(slug="ability-level")
+        answers = set(ability.tags.values_list("name", flat=True))
+        self.assertIn("Beginner", answers)
+        self.assertIn("Varsity", answers)
+        # Sports is offered the varsity answers; an art studio is not.
+        sports = Category.objects.get(slug=q.SPORTS)
+        arts = Category.objects.get(slug=q.ARTS_AND_CRAFTS)
+        self.assertIn("Varsity", set(sports.tags.values_list("name", flat=True)))
+        self.assertNotIn("Varsity", set(arts.tags.values_list("name", flat=True)))
+        self.assertIn("Beginner", set(arts.tags.values_list("name", flat=True)))
+
+    def test_running_it_twice_changes_nothing(self):
+        call_command("seed_taxonomy", stdout=StringIO())
+        counts = (Category.objects.count(), Tag.objects.count(), TagGroup.objects.count())
+        call_command("seed_taxonomy", stdout=StringIO())
+        self.assertEqual(
+            (Category.objects.count(), Tag.objects.count(), TagGroup.objects.count()), counts
+        )
+
+    def test_it_leaves_a_renamed_heading_alone(self):
+        """Matched on slug, and never edited.
+
+        Re-running this after she has reworded a heading must not put our wording
+        back — that would make the command something you cannot safely run.
+        """
+        Category.objects.create(name="Co-operatives, as we call them", slug=q.CO_OPS)
+        call_command("seed_taxonomy", stdout=StringIO())
+        self.assertEqual(
+            Category.objects.get(slug=q.CO_OPS).name, "Co-operatives, as we call them"
+        )

@@ -9,7 +9,7 @@ from django.views.decorators.http import require_GET
 from . import geocoding
 from .addresses import MIN_QUERY_CHARS
 from .forms import ProgramReferralForm, ProgramRegistrationForm
-from .models import Category, Page, Program, Tag
+from .models import WEEKDAYS, Category, Page, Program, Tag
 
 # How long an answer to the same question is worth keeping. Addresses do not
 # move, and the second person to type "Ormond Beach" should cost nothing. An
@@ -25,16 +25,79 @@ ADDRESS_RESULT_LIMIT = 5
 
 def _published_programs():
     # Every listing renders at least the first address of every program, so the
-    # locations come along rather than costing a query per card.
-    return Program.objects.published().select_related("category").prefetch_related("locations")
+    # locations come along rather than costing a query per card. Tags bring their
+    # question with them because a program page lists an answer against the
+    # question it answers, and that is a query per tag otherwise.
+    return (
+        Program.objects.published()
+        .select_related("category")
+        .prefetch_related("locations", "tags__group")
+    )
 
 
-def _listing_context(programs, **extra):
+def _narrow(request, programs):
+    """Apply the search box and every filter the query string carries.
+
+    Every filter is a no-op when handed nothing, so this runs unconditionally and
+    an absent parameter means "do not narrow by this". Each one is also read back
+    into the context, because a filter you cannot see is applied to you is worse
+    than no filter at all.
+    """
+    chosen = {
+        "q": request.GET.get("q", "").strip(),
+        "day": request.GET.get("day", "").strip(),
+        "faith": request.GET.get("faith", "").strip(),
+        "age": request.GET.get("age", "").strip(),
+        "online": request.GET.get("online") == "1",
+        "directpay": request.GET.get("directpay") == "1",
+        "tags": [slug.strip() for slug in request.GET.getlist("tag") if slug.strip()],
+    }
+
+    if chosen["q"]:
+        programs = programs.filter(
+            Q(name__icontains=chosen["q"])
+            | Q(host_name__icontains=chosen["q"])
+            | Q(short_description__icontains=chosen["q"])
+            | Q(description__icontains=chosen["q"])
+            | Q(highlights__icontains=chosen["q"])
+            | Q(class_names__icontains=chosen["q"])
+            # Both spellings of a place: what the program typed and what it
+            # resolved to. Somebody searching "Ormond" should find a program
+            # that wrote "the church on Granada" and resolved to Ormond Beach.
+            | Q(locations__query__icontains=chosen["q"])
+            | Q(locations__label__icontains=chosen["q"])
+            | Q(locations__city__icontains=chosen["q"])
+            # Tags are not listed anywhere, so the search box is the main way
+            # anyone reaches one. Typing "Lego" has to find the Lego programs.
+            | Q(tags__name__icontains=chosen["q"])
+        )
+
+    programs = (
+        programs.meeting_on(chosen["day"])
+        .with_faith_basis(chosen["faith"])
+        .serving_age(chosen["age"])
+        .tagged(chosen["tags"])
+    )
+    if chosen["online"]:
+        programs = programs.online()
+    if chosen["directpay"]:
+        programs = programs.direct_pay()
+    return programs, chosen
+
+
+def _listing_context(request, programs, **extra):
     """Shared context for every page that renders the program listing."""
+    programs, chosen = _narrow(request, programs)
     return {
         "programs": programs.distinct(),
         "categories": Category.objects.all(),
-        "query": "",
+        "query": chosen["q"],
+        "filters": chosen,
+        "filters_active": any(
+            chosen[key] for key in ["day", "faith", "age", "online", "directpay", "tags"]
+        ),
+        "weekdays": WEEKDAYS,
+        "faith_choices": Program.Faith.choices,
         **extra,
     }
 
@@ -53,24 +116,8 @@ def home(request):
 
 def program_list(request):
     programs = _published_programs()
-    query = request.GET.get("q", "").strip()
     category_slug = request.GET.get("category", "").strip()
 
-    if query:
-        programs = programs.filter(
-            Q(name__icontains=query)
-            | Q(short_description__icontains=query)
-            | Q(description__icontains=query)
-            # Both spellings of a place: what the program typed and what it
-            # resolved to. Somebody searching "Ormond" should find a program
-            # that wrote "the church on Granada" and resolved to Ormond Beach.
-            | Q(locations__query__icontains=query)
-            | Q(locations__label__icontains=query)
-            | Q(locations__city__icontains=query)
-            # Tags are not listed anywhere, so the search box is the main way
-            # anyone reaches one. Typing "Lego" has to find the Lego programs.
-            | Q(tags__name__icontains=query)
-        )
     active_category = None
     if category_slug:
         active_category = get_object_or_404(Category, slug=category_slug)
@@ -79,7 +126,15 @@ def program_list(request):
     return render(
         request,
         "directory/program_list.html",
-        _listing_context(programs, query=query, active_category=active_category),
+        _listing_context(
+            request,
+            programs,
+            active_category=active_category,
+            # On this page the heading is a query parameter, so the filter form
+            # has to carry it. On a category page it is in the path already and a
+            # hidden copy would send it twice.
+            category_in_query=bool(category_slug),
+        ),
     )
 
 
@@ -88,7 +143,9 @@ def category_detail(request, slug):
     return render(
         request,
         "directory/program_list.html",
-        _listing_context(_published_programs().filter(category=category), active_category=category),
+        _listing_context(
+            request, _published_programs().filter(category=category), active_category=category
+        ),
     )
 
 
@@ -99,7 +156,7 @@ def tag_detail(request, slug):
     return render(
         request,
         "directory/program_list.html",
-        _listing_context(_published_programs().filter(tags=tag), active_tag=tag),
+        _listing_context(request, _published_programs().filter(tags=tag), active_tag=tag),
     )
 
 

@@ -23,61 +23,25 @@ files still resolve.
 <script src="{% static 'js/address-picker.js' %}" defer></script>
 <script src="{% static 'admin/js/vendor/jquery/jquery.min.js' %}"></script>
 <script src="{% static 'admin/js/vendor/select2/select2.full.min.js' %}"></script>
-<script>
-  // Two jobs: dress the tag field as a Select2, and narrow it to the tags that
-  // go with the chosen heading. The field is a working <select multiple> before
-  // this runs and after any part of it fails, and the server rejects an
-  // out-of-scope tag either way, so nothing here is load-bearing.
-  (function () {
-    var jq = window.jQuery;
-    var select = document.querySelector("select[data-tag-select]");
-    if (!select) return;
-
-    var enhanced = jq && typeof jq.fn.select2 === "function";
-    if (enhanced) {
-      // `size` only helps the native fallback; Select2 would honour it as a height.
-      select.removeAttribute("size");
-      jq(select).select2({
-        width: "100%",
-        placeholder: select.dataset.placeholder || "",
-        closeOnSelect: false
-      });
-    }
-
-    var category = document.querySelector("select[name='category']");
-    if (!category) return;
-    var hint = document.querySelector("[data-tag-hint]");
-    // Held in JavaScript, not the DOM, because narrowing removes options and
-    // widening has to put them back in their original order.
-    var all = Array.prototype.slice.call(select.options);
-
-    function narrow() {
-      var chosen = category.value;
-      var offered = all.filter(function (option) {
-        var headings = (option.dataset.categories || "").split(" ");
-        return chosen !== "" && headings.indexOf(chosen) !== -1;
-      });
-      // A tag that is no longer on offer cannot stay chosen.
-      all.forEach(function (option) {
-        if (offered.indexOf(option) === -1) option.selected = false;
-      });
-      select.textContent = "";
-      offered.forEach(function (option) { select.appendChild(option); });
-      if (hint) hint.hidden = chosen !== "";
-      if (enhanced) jq(select).trigger("change.select2");
-    }
-
-    category.addEventListener("change", narrow);
-    narrow();
-  })();
-</script>
+{% comment %}
+Not deferred, and after jQuery on purpose: it dresses the tag field as a Select2
+if Select2 is there, and works without it if not.
+{% endcomment %}
+<script src="{% static 'js/register-form.js' %}"></script>
 {% endblock %}
 
 {% block content %}
 <h1>Register your program</h1>
 <p class="lede">Run a co-op, class, team, studio, or support group in Volusia County? Fill this in once and it goes in the directory. Everything below is what families will see on your page, so the more you tell us, the less we have to ask.</p>
 
-<form method="post" enctype="multipart/form-data" class="stack form-long" novalidate>
+{% comment %}
+`data-scoped-form` is what register-form.js looks for. The heading chosen under
+"The basics" decides which of the questions below stay on screen — every one of
+them is rendered, and the script hides what does not apply. With no script
+running the whole form shows and the server sorts it out, which is why the
+heading is asked first and nothing below it is required on the strength of it.
+{% endcomment %}
+<form method="post" enctype="multipart/form-data" class="stack form-long" novalidate data-scoped-form>
   {% csrf_token %}
   {{ form.website_url }}
 
@@ -87,17 +51,34 @@ files still resolve.
 
   <fieldset>
     <legend>The basics</legend>
+    <p class="hint">Start with the heading — it decides which of the questions further down we bother you with.</p>
+    {% field form.category %}
     {% field form.program_name %}
+    {% field form.host_name %}
     {% field form.short_description %}
     {% field form.description %}
-    {% field form.category %}
   </fieldset>
+
+  {% if form.question_fields %}
+    <fieldset>
+      <legend>A few specifics</legend>
+      <p class="hint">Only the ones that apply to your kind of program are shown.</p>
+      {% for question in form.question_fields %}{% field question is_answer=True %}{% endfor %}
+    </fieldset>
+  {% endif %}
 
   <fieldset>
     <legend>Tags</legend>
     <p class="hint">Optional, and a shorter way for families to find you. Pick as many as genuinely apply — picking everything helps nobody.</p>
     <p class="hint" data-tag-hint>Choose a heading under “The basics” first. The tags here follow from it.</p>
     {% field form.tags %}
+  </fieldset>
+
+  <fieldset>
+    <legend>Who teaches, and what you teach</legend>
+    {% field form.class_names %}
+    {% field form.instructor_info %}
+    {% field form.faith_basis %}
   </fieldset>
 
   <fieldset>
@@ -113,14 +94,39 @@ files still resolve.
     <legend>Where you meet</legend>
     <p class="hint">Add every place you meet. Pick the match from the list so that families searching near them can find you — and if the place you mean is not on the list, type it and press + anyway.</p>
     {% field form.locations %}
+    {% field form.delivery %}
+    {% field form.travels_to_student_home %}
+    {% field form.service_area %}
   </fieldset>
 
   <fieldset>
-    <legend>Who it is for, and when</legend>
+    <legend>Who it is for</legend>
     {% field form.serves_grades %}
     {% field form.age_min %}
     {% field form.age_max %}
+  </fieldset>
+
+  <fieldset>
+    <legend>When you meet</legend>
+    <p class="hint">The days and dates are what families filter by, so they are worth a minute even if they are only roughly right.</p>
+    {% field form.meeting_days %}
+    {% field form.meeting_time_start %}
+    {% field form.meeting_time_end %}
+    {% field form.season_start %}
+    {% field form.season_end %}
     {% field form.meeting_schedule %}
+  </fieldset>
+
+  <fieldset>
+    <legend>Enrolling</legend>
+    {% field form.enrollment_opens %}
+    {% field form.enrollment_closes %}
+    {% field form.enrollment_notes %}
+  </fieldset>
+
+  <fieldset>
+    <legend>What it costs</legend>
+    {% field form.cost_basis %}
     {% field form.cost_notes %}
   </fieldset>
 
@@ -130,6 +136,12 @@ files still resolve.
     {% field form.step_up_direct_pay %}
     {% field form.step_up_pep %}
     {% field form.step_up_fes_ua %}
+  </fieldset>
+
+  <fieldset>
+    <legend>What makes your program special</legend>
+    <p class="hint">The part families remember. Say what they get with you that they would not get anywhere else.</p>
+    {% field form.highlights %}
   </fieldset>
 
   <fieldset>

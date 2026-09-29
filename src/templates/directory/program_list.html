@@ -9,11 +9,70 @@
 {% if active_category.description %}<p class="lede">{{ active_category.description }}</p>{% endif %}
 {% if active_tag.description %}<p class="lede">{{ active_tag.description }}</p>{% endif %}
 
-<form class="search" action="{% url 'directory:program_list' %}">
-  <label for="q">Search programs</label>
-  <input type="search" id="q" name="q" value="{{ query }}">
-  {% if active_category %}<input type="hidden" name="category" value="{{ active_category.slug }}">{% endif %}
-  <button type="submit">Search</button>
+{% comment %}
+One form, posting back to whatever page it is on, so the same filters work on the
+all-programs page, a category page and a tag page. Everything it can narrow by is
+a plain GET parameter, which means a filtered list is a link somebody can send to
+a friend.
+
+`category` rides along as a hidden input only where it came from the query string.
+On a category page the heading is in the path already, and a hidden copy of it
+would put it in twice.
+{% endcomment %}
+<form class="search-form" action="" method="get">
+  {% comment %}
+  `.search` wraps the box and its button and nothing else. It is a pill with a
+  pane behind it, it hides its own label on purpose, and it strips the border off
+  any input inside it — all of which is right for one row and wrong for anything
+  put underneath. The filters are a sibling of it rather than a child.
+  {% endcomment %}
+  <div class="search">
+    <label for="q">Search programs</label>
+    <input type="search" id="q" name="q" value="{{ query }}">
+    <button type="submit">Search</button>
+  </div>
+  {% if category_in_query %}<input type="hidden" name="category" value="{{ active_category.slug }}">{% endif %}
+
+  <div class="refine">
+    <span class="refine-label">Narrow it down</span>
+    <div class="refine-row">
+      <label for="f-day">Meets on</label>
+      <select id="f-day" name="day">
+        <option value="">Any day</option>
+        {% for code, name in weekdays %}<option value="{{ code }}"{% if filters.day == code %} selected{% endif %}>{{ name }}</option>{% endfor %}
+      </select>
+
+      <label for="f-age">Age</label>
+      <input type="number" id="f-age" name="age" min="0" max="25" value="{{ filters.age }}" placeholder="any">
+
+      <label for="f-faith">Affiliation</label>
+      <select id="f-faith" name="faith">
+        <option value="">Either</option>
+        {% for value, name in faith_choices %}<option value="{{ value }}"{% if filters.faith == value %} selected{% endif %}>{{ name }}</option>{% endfor %}
+      </select>
+    </div>
+
+    <div class="refine-checks">
+      <label><input type="checkbox" name="online" value="1"{% if filters.online %} checked{% endif %}> Online available</label>
+      <label><input type="checkbox" name="directpay" value="1"{% if filters.directpay %} checked{% endif %}> Step Up direct pay</label>
+    </div>
+
+    {% comment %}
+    Tag filters arrive as repeated `tag=` parameters from a program page's chips,
+    so they are carried across rather than offered as a control — there are far
+    too many tags to list. Each one is removable, which is the part that matters.
+    {% endcomment %}
+    {% for slug in filters.tags %}<input type="hidden" name="tag" value="{{ slug }}">{% endfor %}
+
+    <div class="refine-actions">
+      {% comment %}
+      Quieter than the Search button, because it is the same submit: both send the
+      whole form. Two buttons of equal weight would read as two different actions.
+      {% endcomment %}
+      <button type="submit" class="button-quiet">Apply filters</button>
+      {% if filters_active or query %}<a class="clear" href="{% if active_category %}{{ active_category.get_absolute_url }}{% elif active_tag %}{{ active_tag.get_absolute_url }}{% else %}{% url 'directory:program_list' %}{% endif %}">Clear</a>{% endif %}
+    </div>
+  </div>
 </form>
 
 <nav class="filters">

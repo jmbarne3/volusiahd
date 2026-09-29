@@ -5,24 +5,25 @@ only way to group it into fieldsets a human can read. `{% field form.x %}`
 keeps that readable without repeating the markup twenty-five times.
 """
 
-from django import template
+from django import forms, template
 
 register = template.Library()
 
-# How many colours the category code rotates through. Nine — one per category,
-# and the taxonomy is collapsing to fewer than ten, so there is deliberately no
-# headroom here. The colours themselves live in the --code-* block in site.css.
+# How many colours the category code rotates through — one per heading, and there
+# are thirteen headings. The colours themselves live in the --code-* block in
+# site.css.
 #
-# This used to be thirty, which bought room to grow at the cost of hues twelve
-# degrees apart that nobody could tell apart. Fewer categories means the budget
-# can go into distinctness instead: nine hues forty degrees apart, each with its
-# own lightness and chroma.
+# This was nine, on the stated assumption that the taxonomy was collapsing to
+# fewer than ten. It did the opposite: the site owner's programme types number
+# thirteen, so two pairs of headings were sharing a chip colour on the filter bar.
 #
-# A tenth category wraps back to the first and two categories share a colour.
-# If the taxonomy ever grows past nine, the fix is a colour field on `Category`
-# rather than a wider ring — at that point the colours are editorial, not
-# generated. Tags have no colour at all, by design.
-CATEGORY_COLOUR_COUNT = 9
+# Thirteen hues around the wheel are 27 degrees apart rather than 40, which is
+# less distinct than before and about as far as a generated ring can be pushed.
+# The note the nine-colour version left still stands and now stands more firmly:
+# a fourteenth heading should be the moment this becomes a colour field on
+# `Category`, chosen by somebody with an opinion, rather than a thinner slice.
+# Tags have no colour at all, by design.
+CATEGORY_COLOUR_COUNT = 13
 
 
 @register.filter
@@ -40,10 +41,19 @@ def colour_code(category):
 
 
 @register.inclusion_tag("directory/_field.html")
-def field(bound_field):
+def field(bound_field, is_answer=False):
+    """One form row.
+
+    `is_answer` marks a row as the answers to a tag question, which the
+    registration form's script needs to know: those rows hide themselves when
+    every answer inside them has been narrowed away, and no other row does.
+    """
     widget = bound_field.field.widget
     return {
         "field": bound_field,
-        "is_checkbox": widget.__class__.__name__ == "CheckboxInput",
-        "is_multi_checkbox": widget.__class__.__name__ == "CheckboxSelectMultiple",
+        "is_checkbox": isinstance(widget, forms.CheckboxInput),
+        # A group of radios or checkboxes has no single input for a <label for>
+        # to point at, so it gets a heading of its own instead.
+        "is_group": isinstance(widget, (forms.CheckboxSelectMultiple, forms.RadioSelect)),
+        "is_answer": is_answer,
     }

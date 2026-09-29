@@ -13,6 +13,7 @@
   <p class="crumb"><a href="{% url 'directory:program_list' %}">All programs</a></p>
   {% if program.logo %}<img class="logo" src="{{ program.logo.url }}" alt="">{% endif %}
   <h1>{{ program.name }}</h1>
+  {% if program.host_name %}<p class="host">Part of {{ program.host_name }}</p>{% endif %}
   <p class="lede">{{ program.short_description }}</p>
 
   <p class="meta">
@@ -23,25 +24,63 @@
     <div class="program-body">
       {% if program.description %}<div class="prose">{{ program.description|safe }}</div>{% endif %}
 
+      {% comment %}
+      Both of these are plain text typed by whoever registered the program, so
+      they get `linebreaks` rather than `safe`. The rich text editor is ours, and
+      only `description` goes through it.
+      {% endcomment %}
+      {% if program.highlights %}
+        <section class="program-section">
+          <h2>What makes it special</h2>
+          <div class="prose">{{ program.highlights|linebreaks }}</div>
+        </section>
+      {% endif %}
+
+      {% if program.instructor_info %}
+        <section class="program-section">
+          <h2>Who teaches</h2>
+          <div class="prose">{{ program.instructor_info|linebreaks }}</div>
+        </section>
+      {% endif %}
+
       {% if program.tags.all %}
         {% comment %}
         Tags sit below the description rather than in the meta row with the
         categories. A program can carry a dozen, and a dozen chips above the
         fold would push the description off a phone screen entirely.
+
+        Answers to a tag question are not chips: "Varsity" on its own is not
+        obviously the answer to anything, so those are listed against their
+        question in the sidebar instead.
         {% endcomment %}
-        <nav class="tag-row" aria-label="Tags">
-          {% for tag in program.tags.all %}<a class="tag-chip" href="{{ tag.get_absolute_url }}">{{ tag.name }}</a>{% endfor %}
-        </nav>
+        {% if program.plain_tag_list %}
+          <nav class="tag-row" aria-label="Tags">
+            {% for tag in program.plain_tag_list %}<a class="tag-chip" href="{{ tag.get_absolute_url }}">{{ tag.name }}</a>{% endfor %}
+          </nav>
+        {% endif %}
       {% endif %}
     </div>
 
     <aside class="program-aside">
       <dl class="facts">
-        {% if program.meeting_schedule %}<dt>When it meets</dt><dd>{{ program.meeting_schedule|linebreaksbr }}</dd>{% endif %}
+        {% if program.when_display %}<dt>When it meets</dt><dd>{{ program.when_display }}</dd>{% endif %}
+        {% if program.meeting_schedule %}<dt>Also</dt><dd>{{ program.meeting_schedule|linebreaksbr }}</dd>{% endif %}
         {% if program.serves_grades %}<dt>Grades</dt><dd>{{ program.serves_grades }}</dd>{% endif %}
         {% if program.age_range_display %}<dt>Ages</dt><dd>{{ program.age_range_display }}</dd>{% endif %}
-        {% if program.cost_notes %}<dt>Cost</dt><dd>{{ program.cost_notes|linebreaksbr }}</dd>{% endif %}
+        {% if program.class_names %}<dt>Classes</dt><dd>{{ program.class_names }}</dd>{% endif %}
+
+        {% for question, answers in program.answered_questions %}
+          <dt>{{ question.name }}</dt>
+          <dd>{% for tag in answers %}<a href="{{ tag.get_absolute_url }}">{{ tag.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</dd>
+        {% endfor %}
+
+        {% if program.faith_basis %}<dt>Affiliation</dt><dd>{{ program.get_faith_basis_display }}</dd>{% endif %}
+        {% if program.cost_display %}<dt>Cost</dt><dd>{{ program.cost_display|linebreaksbr }}</dd>{% endif %}
         {% if program.step_up_display %}<dt>Step Up</dt><dd>{{ program.step_up_display }}</dd>{% endif %}
+        {% if program.enrollment_display %}<dt>Enrolling</dt><dd>{{ program.enrollment_display }}</dd>{% endif %}
+        {% if program.delivery %}<dt>In person or online</dt><dd>{{ program.get_delivery_display }}</dd>{% endif %}
+        {% if program.travels_to_student_home %}<dt>Travel</dt><dd>They come to you</dd>{% endif %}
+        {% if program.service_area %}<dt>How far they go</dt><dd>{{ program.service_area }}</dd>{% endif %}
         {% if program.location_list %}<dt>Where</dt>{% for location in program.location_list %}<dd>{{ location }}</dd>{% endfor %}{% endif %}
         {% if program.website %}<dt>Website</dt><dd><a href="{{ program.website }}" rel="nofollow noopener">{{ program.website }}</a></dd>{% endif %}
         {% if program.facebook %}<dt>Facebook</dt><dd>{% include "directory/_social_link.html" with network="facebook" url=program.facebook label="Facebook page for "|add:program.name %}</dd>{% endif %}

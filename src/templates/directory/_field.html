@@ -1,10 +1,10 @@
 {% comment %}One form row. Errors above the input, help text below it.{% endcomment %}
-<div class="field{% if field.errors %} has-error{% endif %}{% if is_checkbox %} field-check{% endif %}">
+<div class="field{% if field.errors %} has-error{% endif %}{% if is_checkbox %} field-check{% endif %}"{% if is_answer %} data-answer-field{% endif %}>
   {% if field.errors %}<p class="field-error">{{ field.errors|join:" " }}</p>{% endif %}
   {% if is_checkbox %}
     {{ field }} <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-  {% elif is_multi_checkbox %}
-    <span class="group-label">{{ field.label }}</span>
+  {% elif is_group %}
+    <span class="group-label">{{ field.label }}{% if field.field.required %} <span class="req" title="required">*</span>{% endif %}</span>
     {{ field }}
   {% else %}
     <label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span class="req" title="required">*</span>{% endif %}</label>

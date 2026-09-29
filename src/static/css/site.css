@@ -118,18 +118,23 @@
 :root[data-theme="light"] { color-scheme: light; }
 :root[data-theme="dark"]  { color-scheme: dark; }
 
-/* Category colours: nine, one per category, each picked rather than generated.
+/* Category colours: thirteen, one per heading, each picked rather than generated.
 
-   The previous ring traded distinctness for headroom — thirty codes, which
-   meant near-identical hues separated only by tone. Categories are collapsing
-   into fewer than ten, so the headroom is no longer worth paying for, and the
-   budget goes into telling nine colours apart instead.
+   This ring has been thirty and it has been nine. Thirty traded distinctness for
+   headroom and bought hues twelve degrees apart that nobody could tell apart.
+   Nine was written on the assumption that the taxonomy was collapsing to fewer
+   than ten; the site owner's programme types then turned out to number thirteen,
+   and two pairs of headings were quietly sharing a chip.
 
-   Hues are 40 degrees apart, but lightness and chroma move too, tuned per hue
-   rather than held flat: ochre has to sit lighter than indigo to read as the
-   same strength, and a ring that ignores that looks muddy in the yellows and
-   heavy in the blues. The dark theme lifts each one, because a mid-tone dot
+   So: thirteen hues, 27 degrees apart. Lightness and chroma move too, tuned per
+   hue rather than held flat, because ochre has to sit lighter than indigo to read
+   as the same strength and a ring that ignores that looks muddy in the yellows
+   and heavy in the blues. The dark theme lifts each one, since a mid-tone dot
    disappears against a dark pane.
+
+   Twenty-seven degrees is about as thin as a generated ring should be sliced. A
+   fourteenth heading is the point at which this should become a colour field on
+   `Category`, chosen by somebody with an opinion.
 
    Tags do not use this. They are deliberately colourless — see `.tag-chip`. */
 [class*="c"] { --code: oklch(var(--code-l, 55%) var(--code-c, .12) var(--code-h, 255)); }
@@ -140,15 +145,19 @@
   );
 }
 
-.c1 { --code-h:  40; --code-l: 55%; --code-c: .13; --code-l-dark: 78%; --code-c-dark: .12; }  /* terracotta */
-.c2 { --code-h:  80; --code-l: 64%; --code-c: .12; --code-l-dark: 84%; --code-c-dark: .12; }  /* ochre */
-.c3 { --code-h: 120; --code-l: 58%; --code-c: .11; --code-l-dark: 80%; --code-c-dark: .11; }  /* olive */
-.c4 { --code-h: 160; --code-l: 55%; --code-c: .12; --code-l-dark: 78%; --code-c-dark: .12; }  /* green */
-.c5 { --code-h: 200; --code-l: 58%; --code-c: .09; --code-l-dark: 80%; --code-c-dark: .09; }  /* teal */
-.c6 { --code-h: 240; --code-l: 52%; --code-c: .12; --code-l-dark: 76%; --code-c-dark: .12; }  /* blue */
-.c7 { --code-h: 280; --code-l: 47%; --code-c: .14; --code-l-dark: 72%; --code-c-dark: .14; }  /* indigo */
-.c8 { --code-h: 320; --code-l: 50%; --code-c: .13; --code-l-dark: 74%; --code-c-dark: .13; }  /* plum */
-.c9 { --code-h:   0; --code-l: 54%; --code-c: .15; --code-l-dark: 76%; --code-c-dark: .14; }  /* crimson */
+.c1  { --code-h:  40; --code-l: 55%; --code-c: .13; --code-l-dark: 78%; --code-c-dark: .12; }  /* terracotta */
+.c2  { --code-h:  68; --code-l: 61%; --code-c: .13; --code-l-dark: 82%; --code-c-dark: .12; }  /* amber */
+.c3  { --code-h:  96; --code-l: 66%; --code-c: .12; --code-l-dark: 85%; --code-c-dark: .11; }  /* ochre */
+.c4  { --code-h: 123; --code-l: 58%; --code-c: .11; --code-l-dark: 80%; --code-c-dark: .11; }  /* olive */
+.c5  { --code-h: 151; --code-l: 56%; --code-c: .12; --code-l-dark: 78%; --code-c-dark: .12; }  /* green */
+.c6  { --code-h: 178; --code-l: 58%; --code-c: .09; --code-l-dark: 80%; --code-c-dark: .09; }  /* teal */
+.c7  { --code-h: 206; --code-l: 55%; --code-c: .10; --code-l-dark: 78%; --code-c-dark: .10; }  /* sea blue */
+.c8  { --code-h: 234; --code-l: 52%; --code-c: .12; --code-l-dark: 76%; --code-c-dark: .12; }  /* blue */
+.c9  { --code-h: 262; --code-l: 48%; --code-c: .14; --code-l-dark: 73%; --code-c-dark: .13; }  /* indigo */
+.c10 { --code-h: 289; --code-l: 47%; --code-c: .14; --code-l-dark: 72%; --code-c-dark: .13; }  /* violet */
+.c11 { --code-h: 317; --code-l: 50%; --code-c: .13; --code-l-dark: 74%; --code-c-dark: .13; }  /* plum */
+.c12 { --code-h: 345; --code-l: 53%; --code-c: .14; --code-l-dark: 76%; --code-c-dark: .13; }  /* rose */
+.c13 { --code-h:  12; --code-l: 54%; --code-c: .15; --code-l-dark: 76%; --code-c-dark: .14; }  /* crimson */
 
 .c-all { --code: var(--muted); }
 
@@ -693,6 +702,9 @@ a.tag:hover { color: var(--ink-strong); }
 ),
 .stack :is(input, select, textarea):not(
   [type=checkbox], [type=radio], [type=hidden], .select2-search__field
+),
+.refine :is(input, select, textarea):not(
+  [type=checkbox], [type=radio], [type=hidden], .select2-search__field
 ) {
   width: 100%;
   padding: .6rem .85rem;
@@ -706,7 +718,8 @@ a.tag:hover { color: var(--ink-strong); }
   font: inherit;
 }
 .field :is(input, select, textarea):focus-visible,
-.stack :is(input, select, textarea):focus-visible { outline-offset: 1px; }
+.stack :is(input, select, textarea):focus-visible,
+.refine :is(input, select, textarea):focus-visible { outline-offset: 1px; }
 .field textarea { resize: vertical; min-height: 7rem; }
 
 /* A search box carries Safari's own rounded, inset look until it is told not
@@ -721,7 +734,9 @@ a.tag:hover { color: var(--ink-strong); }
    reach. So: draw our own out of two triangles, in a token colour that follows
    the theme, and leave room for it. Not on a multiple select, which has no
    arrow to replace. */
-.field select:not([multiple]), .stack select:not([multiple]) {
+.field select:not([multiple]),
+.stack select:not([multiple]),
+.refine select:not([multiple]) {
   /* Without this the native arrow stays and ours is drawn beside it, which
      looks exactly like the bug it is: two carets. */
   appearance: none;
@@ -754,6 +769,93 @@ a.tag:hover { color: var(--ink-strong); }
 .field ul label, .stack ul label { font-weight: 400; display: inline; color: var(--ink); }
 .field-check label { display: inline; font-weight: 400; }
 .field .req { color: var(--accent); }
+
+/* A group of checkboxes or radios: the days a program meets, the answers to a
+   tag question. Django renders one as a bare <div> of <div>s with no class to
+   hook onto, so it is matched by what is inside it instead — `:has()`, which
+   this stylesheet already depends on browsers having through `light-dark()`. */
+/* --- Narrowing a listing -------------------------------------------------- */
+
+.search-form { max-width: 34rem; margin: 0 0 var(--s-6); }
+.search-form .search { margin-bottom: 0; max-width: none; }
+
+.refine { margin-top: var(--s-4); }
+.refine-label {
+  display: block;
+  font-size: .9rem;
+  font-weight: 580;
+  color: var(--muted);
+  margin-bottom: var(--s-3);
+}
+.refine-row, .refine-checks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-4);
+}
+.refine-checks { margin-top: var(--s-3); }
+.refine label { font-size: .9rem; font-weight: 400; margin: 0; white-space: nowrap; }
+.refine-checks label { display: inline-flex; align-items: center; gap: .4rem; }
+/* Narrow controls, because there are five of them on one line and the page's
+   default recipe makes every box full width. */
+/* Narrower and shorter than the page default, because there are three of them on
+   one line and the shared recipe makes every box full width.
+
+   The select keeps its 2.5rem of right padding. That is not spare room: it is
+   what the drawn caret sits in, and a `padding` shorthand here would put the
+   longest option name straight underneath it. */
+.refine :is(select, input[type=number]) { width: auto; min-width: 7rem; }
+.refine input[type=number] { padding: .45rem .6rem; }
+.refine select:not([multiple]) { padding: .45rem 2.5rem .45rem .7rem; }
+
+/* The same submit as the Search button above it, so it should not look like a
+   second, louder decision. */
+.button-quiet {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--hairline);
+  box-shadow: none;
+}
+.button-quiet:hover { background: var(--pane-raised); color: var(--accent-hover); }
+.refine-actions { display: flex; align-items: center; gap: var(--s-4); margin-top: var(--s-4); }
+.refine-actions .clear { font-size: .9rem; }
+
+.program .host { color: var(--muted); margin: calc(var(--s-2) * -1) 0 var(--s-3); }
+.program-section { margin-top: var(--s-6); }
+.program-section h2 {
+  font-size: 1.15rem;
+  letter-spacing: -.015em;
+  margin: 0 0 var(--s-3);
+  color: var(--ink-strong);
+}
+
+.field > div:has(input:is([type=checkbox], [type=radio])) {
+  display: grid;
+  gap: var(--s-2);
+  margin: var(--s-2) 0 0;
+  grid-template-columns: repeat(auto-fill, minmax(min(11rem, 100%), 1fr));
+}
+.field > div:has(input:is([type=checkbox], [type=radio])) label {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  margin: 0;
+  font-weight: 400;
+  color: var(--ink);
+}
+
+/* The registration form hides a question that the chosen heading does not ask,
+   and hides an answer that heading is not offered, by setting `hidden`. Every
+   one of these selectors sets a `display`, and a `display` in a stylesheet beats
+   the user agent's rule for `[hidden]` — so each has to say it again. The same
+   trap as `.theme-switch[hidden]` above, and the reason this is written out
+   rather than left to the browser: the failure is silent and looks like the
+   script not running. */
+.field[hidden],
+fieldset[hidden],
+.field > div:has(input:is([type=checkbox], [type=radio])) label[hidden] {
+  display: none;
+}
 
 .has-error :is(input, select, textarea) { border-color: var(--danger-line); }
 .field-error { color: var(--danger); font-size: .9rem; margin: 0 0 var(--s-2); }

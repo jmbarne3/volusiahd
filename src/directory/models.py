@@ -4,19 +4,27 @@ The shape of these models determines the admin experience, which is the thing
 that has to still be working in eighteen months. Every field that is ambiguous
 to a non-technical editor carries `help_text`; that text is the documentation.
 
-Note the absence of any faith-based or secular flag. This is deliberate and
-settled — programs describe their own affiliation in their own description.
+Faith affiliation is a field here, and for most of this project's life it
+deliberately was not. The argument against it was that a program describes its
+own character better in prose than a checkbox can. The argument that won is that
+eight of the thirteen kinds of program we list asked for it by name, and that for
+a great many families it is the first thing they want to know and the last thing
+they should have to go hunting through paragraphs for. It stays optional, and
+"not stated" is a perfectly good answer to publish.
 """
 
 import re
 import time
 
+from django import forms
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import escape
+from django.utils.text import capfirst
 from django_prose_editor.fields import ProseEditorField
 
 from . import geocoding
@@ -37,6 +45,116 @@ RICH_TEXT_CONFIG = {
         "History": True,
     }
 }
+
+
+WEEKDAYS = [
+    ("mon", "Monday"),
+    ("tue", "Tuesday"),
+    ("wed", "Wednesday"),
+    ("thu", "Thursday"),
+    ("fri", "Friday"),
+    ("sat", "Saturday"),
+    ("sun", "Sunday"),
+]
+WEEKDAY_ORDER = [code for code, _ in WEEKDAYS]
+WEEKDAY_NAMES = dict(WEEKDAYS)
+
+
+def split_weekdays(value):
+    """Whatever a weekday value holds, as an ordered list of valid codes.
+
+    Accepts the stored string, a list from a form, or None, and always returns
+    the days in week order rather than the order somebody happened to tick them.
+    Anything unrecognised is dropped rather than raising: a garbled value should
+    mean "we do not know which days" and not a 500 on a program page.
+    """
+    if not value:
+        return []
+    codes = value.split(",") if isinstance(value, str) else list(value)
+    codes = {str(code).strip().lower() for code in codes}
+    return [code for code in WEEKDAY_ORDER if code in codes]
+
+
+def join_weekdays(value):
+    """The canonical stored form: week order, comma separated, no spaces."""
+    return ",".join(split_weekdays(value))
+
+
+def validate_weekdays(value):
+    codes = value.split(",") if isinstance(value, str) else list(value or [])
+    unknown = [code for code in codes if code and code not in WEEKDAY_NAMES]
+    if unknown:
+        raise ValidationError(f"Not days of the week: {', '.join(unknown)}.")
+
+
+class WeekdayChoiceField(forms.MultipleChoiceField):
+    """Seven checkboxes in, one stored string out."""
+
+    widget = forms.CheckboxSelectMultiple
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("choices", WEEKDAYS)
+        kwargs.setdefault("required", False)
+        super().__init__(**kwargs)
+
+    def prepare_value(self, value):
+        # The model hands back "mon,thu"; the checkboxes need ["mon", "thu"].
+        return split_weekdays(value) if isinstance(value, str) else value
+
+    def clean(self, value):
+        return join_weekdays(super().clean(value))
+
+    def has_changed(self, initial, data):
+        return join_weekdays(initial) != join_weekdays(data)
+
+
+class WeekdaysField(models.CharField):
+    """The days of the week something meets, as a comma separated list of codes.
+
+    Text rather than seven boolean columns, a join table, or a bitmask, and the
+    reason is one convenient accident: no day's three-letter code is a substring
+    of another's. That makes `filter(meeting_days__contains="thu")` an exact
+    test rather than a near-miss waiting to happen, so the one query this field
+    exists to answer — "what meets on Thursdays" — needs no cleverness at all.
+
+    It is a scan rather than an index seek. Over a directory of a few hundred
+    programs that is not worth a column per day; if this ever becomes the slow
+    part of a page, the honest fix is seven generated columns and not a rewrite
+    of everything that reads it.
+    """
+
+    def __init__(self, *args, **kwargs):
+        # Seven codes and six commas. Set here rather than at each use so the two
+        # concrete models cannot disagree about it.
+        kwargs["max_length"] = 27
+        kwargs.setdefault("blank", True)
+        kwargs.setdefault("validators", [validate_weekdays])
+        super().__init__(*args, **kwargs)
+
+    def deconstruct(self):
+        name, path, args, kwargs = super().deconstruct()
+        kwargs.pop("max_length", None)
+        return name, path, args, kwargs
+
+    def get_prep_value(self, value):
+        # A list assigned straight onto the instance is normalised on the way to
+        # the database, so a shell script and the form store the same thing.
+        if not isinstance(value, str) and value is not None:
+            value = join_weekdays(value)
+        return super().get_prep_value(value)
+
+    def formfield(self, **kwargs):
+        # Built directly rather than through `super()`, which would hand a
+        # `max_length` and an `empty_value` to a field that takes neither.
+        defaults = {
+            "required": not self.blank,
+            "label": capfirst(self.verbose_name),
+            "help_text": self.help_text,
+        }
+        defaults.update(kwargs)
+        for unusable in ["max_length", "empty_value", "widget"]:
+            defaults.pop(unusable, None)
+        return WeekdayChoiceField(**defaults)
 
 
 class SanitizedRichTextMixin(models.Model):
@@ -103,6 +221,75 @@ class Category(models.Model):
     def get_absolute_url(self):
         return reverse("directory:category", kwargs={"slug": self.slug})
 
+    def question_groups(self):
+        """The tag questions this heading asks, each with only its own answers.
+
+        Derived rather than stored. A heading offers a tag through `tags`, so it
+        asks a question exactly when it offers one of that question's answers —
+        which means there is one screen to maintain instead of two that can
+        disagree about whether Sports asks about ability level.
+        """
+        grouped = {}
+        for tag in self.tags.all():
+            if tag.group_id:
+                grouped.setdefault(tag.group, []).append(tag)
+        return sorted(grouped.items(), key=lambda pair: (pair[0].sort_order, pair[0].name))
+
+    def plain_tags(self):
+        """The tags that are not an answer to anything — ordinary subject tags."""
+        return [tag for tag in self.tags.all() if not tag.group_id]
+
+
+class TagGroup(models.Model):
+    """A question whose answers are tags. "Ability level". "Parent involvement".
+
+    Most of what looks like a field belonging to one kind of program turns out to
+    be a question with a fixed set of answers — beginner or advanced, drop-off or
+    stay and help — where the only thing that varies is who gets asked. Those are
+    tags in a named group rather than columns, and that buys three things: a new
+    question costs a row here instead of a migration, the answers are hers to
+    reword without a deploy, and filtering by one goes through the same code path
+    and the same index as filtering by any other tag.
+
+    Which headings ask a question is deliberately not stored here. See
+    `Category.question_groups`.
+    """
+
+    name = models.CharField(
+        max_length=60,
+        unique=True,
+        help_text='The question, worded as a label: "Ability level", "Parent involvement".',
+    )
+    slug = models.SlugField(
+        max_length=60,
+        unique=True,
+        help_text="Used in the web address when someone filters by this. Leave blank "
+        "and it will be filled in from the name.",
+    )
+    prompt = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Optional. A sentence under the question on the registration form.",
+    )
+    allows_several = models.BooleanField(
+        "more than one answer",
+        default=True,
+        help_text="Tick when a program can honestly pick several — a class may suit "
+        "beginners and intermediates both. Untick when the answers are alternatives.",
+    )
+    sort_order = models.PositiveSmallIntegerField(
+        default=100,
+        help_text="Lower numbers appear first on the form.",
+    )
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+        verbose_name = "tag question"
+        verbose_name_plural = "tag questions"
+
+    def __str__(self):
+        return self.name
+
 
 class Tag(models.Model):
     """The finer of the two taxonomies. Many more of these than categories.
@@ -134,24 +321,440 @@ class Tag(models.Model):
         blank=True,
         help_text="Optional. One or two sentences shown at the top of the tag's page.",
     )
+    # SET_NULL rather than CASCADE: deleting a question should stop asking it,
+    # not delete the answers and unfile every program that gave one.
+    group = models.ForeignKey(
+        TagGroup,
+        related_name="tags",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        help_text="Leave blank for an ordinary subject tag. Set it and this tag becomes "
+        "one of the answers to that question, asked of any heading that offers it.",
+    )
 
     class Meta:
         ordering = ["name"]
 
     def __str__(self):
-        return self.name
+        """Qualified by its question, where it has one.
+
+        This is what the admin's tag pickers show, and "Beginner" on its own in a
+        list of two hundred tags tells nobody whether it is an answer about ability
+        or a subject somebody invented. Public templates render `name`, so nothing
+        a family reads changes.
+        """
+        return f"{self.group.name}: {self.name}" if self.group_id else self.name
 
     def get_absolute_url(self):
         return reverse("directory:tag", kwargs={"slug": self.slug})
 
 
+def _clock(value):
+    """A time of day as somebody would say it: 9 a.m., 9:30 a.m., noon.
+
+    Written out rather than handed to `strftime`, because stripping the leading
+    zero off an hour needs the GNU "%-I" extension and this has to give the same
+    answer on a developer's Mac as it does on the server.
+    """
+    if value.minute == 0 and value.hour == 12:
+        return "noon"
+    if value.minute == 0 and value.hour == 0:
+        return "midnight"
+    hour = value.hour % 12 or 12
+    clock = f"{hour}:{value.minute:02d}" if value.minute else str(hour)
+    return f"{clock} {'a.m.' if value.hour < 12 else 'p.m.'}"
+
+
+def _date(value, *, year=False):
+    """September 2, or September 2, 2026 when the year is doing work."""
+    text = f"{value.strftime('%B')} {value.day}"
+    return f"{text}, {value.year}" if year else text
+
+
+class SharedProgramFields(models.Model):
+    """Every question a registration and a published program answer identically.
+
+    The two models mirror each other on purpose — approving a registration is
+    meant to be one click and no retyping — and a mirror maintained by hand
+    across two class bodies is a mirror that drifts. Anything worded the same on
+    both sides is declared here once, and `shared_values()` is what copies it
+    across, so a field added here cannot be forgotten on the way to publication.
+
+    What is deliberately not here is what genuinely differs: the name of the
+    thing (`name` against `program_name`), the description (a rich text editor
+    for us, plain text from a stranger), what deleting a category does, and where
+    a logo is uploaded to.
+
+    Nearly all of it is optional at the database level, and that is not
+    laziness. The thirteen kinds of program in this directory ask overlapping but
+    different sets of these questions — a testing service has no meeting days
+    and a parent support group serves no grades — so which answers are required
+    is a property of the heading, held in `questions.py`, and not something a
+    column can know.
+    """
+
+    class Faith(models.TextChoices):
+        FAITH_BASED = "faith", "Faith-based"
+        SECULAR = "secular", "Not faith-based"
+
+    class Cost(models.TextChoices):
+        FREE = "free", "Free"
+        PAID = "paid", "There is a cost"
+        VARIES = "varies", "Varies"
+
+    class Delivery(models.TextChoices):
+        IN_PERSON = "in_person", "In person"
+        ONLINE = "online", "Online"
+        HYBRID = "hybrid", "In person or online"
+
+    # --- Who is behind it ---------------------------------------------------
+
+    host_name = models.CharField(
+        "host or group name",
+        max_length=120,
+        blank=True,
+        help_text="The larger group this runs under, when the listing is a class or a "
+        "team rather than the group itself. Leave blank when they are the same thing.",
+    )
+    class_names = models.CharField(
+        "classes offered",
+        max_length=240,
+        blank=True,
+        help_text="The individual classes, separated by commas — "
+        "e.g. 'Algebra I, Geometry, Chemistry'.",
+    )
+    instructor_info = models.TextField(
+        "teachers and qualifications",
+        blank=True,
+        help_text="Who teaches, and what qualifies them. Families ask this before they "
+        "ask almost anything else.",
+    )
+    highlights = models.TextField(
+        "what makes it special",
+        blank=True,
+        help_text="Plain text. What a family gets here that they would not get "
+        "elsewhere. Blank lines start new paragraphs.",
+    )
+    faith_basis = models.CharField(
+        "faith affiliation",
+        max_length=8,
+        choices=Faith.choices,
+        blank=True,
+        help_text="Leave blank if they have not told us. 'Not faith-based' is a "
+        "different answer from no answer, and both are fine to publish.",
+    )
+
+    # --- How families reach them -------------------------------------------
+
+    website = models.URLField(blank=True)
+    facebook = models.URLField(
+        "Facebook page",
+        blank=True,
+        help_text="The full address of their Facebook page or group, "
+        "e.g. 'https://facebook.com/groups/example'.",
+    )
+    email = models.EmailField(blank=True, help_text="The program's general contact address.")
+    phone = models.CharField(max_length=32, blank=True)
+
+    # --- Who it serves ------------------------------------------------------
+
+    serves_grades = models.CharField(
+        max_length=80,
+        blank=True,
+        help_text="Free text, e.g. 'K-8' or 'high school only'. Leave blank if it varies.",
+    )
+    age_min = models.PositiveSmallIntegerField(null=True, blank=True)
+    age_max = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    # --- When ---------------------------------------------------------------
+
+    # Days of the week and a run of dates, asked of every kind of program. A
+    # co-op meeting Tuesdays and Thursdays from September to May is the ordinary
+    # case, and the three fields below say exactly that in a form a filter can
+    # read. `meeting_schedule` survives underneath them for everything a
+    # structure cannot hold: alternate weeks, times that vary by class, a season
+    # that skips December.
+    meeting_days = WeekdaysField(
+        "days they meet",
+        help_text="Tick every day they normally meet.",
+    )
+    meeting_time_start = models.TimeField(
+        "starts at",
+        null=True,
+        blank=True,
+        help_text="Leave blank if it varies.",
+    )
+    meeting_time_end = models.TimeField("ends at", null=True, blank=True)
+    season_start = models.DateField(
+        "first meeting",
+        null=True,
+        blank=True,
+        help_text="The date this season or term starts. Leave blank if they run "
+        "year round or have not set one.",
+    )
+    season_end = models.DateField("last meeting", null=True, blank=True)
+    meeting_schedule = models.TextField(
+        "anything else about when",
+        blank=True,
+        help_text="Free text, for what the boxes above cannot say — "
+        "e.g. 'alternate Tuesdays' or 'times vary by class'.",
+    )
+
+    enrollment_opens = models.DateField(null=True, blank=True)
+    enrollment_closes = models.DateField(null=True, blank=True)
+    enrollment_notes = models.CharField(
+        "enrollment, in words",
+        max_length=160,
+        blank=True,
+        help_text="e.g. 'rolling admission' or 'waiting list only'.",
+    )
+
+    # --- What it costs ------------------------------------------------------
+
+    cost_basis = models.CharField(
+        "cost",
+        max_length=8,
+        choices=Cost.choices,
+        blank=True,
+        help_text="The headline answer. The detail goes in the box below.",
+    )
+    cost_notes = models.TextField(
+        "cost, in detail",
+        blank=True,
+        help_text="Free text — fee structures never fit a single number. "
+        "e.g. '$45/semester per family, plus a $20 materials fee'.",
+    )
+
+    # Step Up For Students runs Florida's scholarships through a marketplace
+    # called EMA. A direct pay provider is one the family can pay from their
+    # scholarship account without laying out the money first, which for many
+    # families decides whether a program is affordable at all. The two
+    # scholarships are separate approvals, so a provider can be one and not
+    # the other.
+    step_up_direct_pay = models.BooleanField(
+        "Step Up direct pay provider",
+        default=False,
+        help_text="Tick if families can pay this program directly through "
+        "Step Up For Students' EMA marketplace.",
+    )
+    step_up_pep = models.BooleanField(
+        "direct pay for PEP",
+        default=False,
+        help_text="Personalized Education Program.",
+    )
+    step_up_fes_ua = models.BooleanField(
+        "direct pay for FES-UA",
+        default=False,
+        help_text="Family Empowerment Scholarship for Students with Unique Abilities.",
+    )
+
+    # --- Where, and how far -------------------------------------------------
+
+    delivery = models.CharField(
+        "in person or online",
+        max_length=10,
+        choices=Delivery.choices,
+        blank=True,
+        help_text="Leave blank if they have not told us.",
+    )
+    travels_to_student_home = models.BooleanField(
+        "will travel to the student",
+        default=False,
+        help_text="Tick if they come to the family rather than the other way round.",
+    )
+    service_area = models.CharField(
+        "how far they travel",
+        max_length=160,
+        blank=True,
+        help_text="e.g. 'west Volusia only' or 'up to 30 miles'. For programs with no "
+        "one fixed address.",
+    )
+
+    class Meta:
+        abstract = True
+
+    @classmethod
+    def shared_field_names(cls):
+        """Every field declared on this base, in declaration order.
+
+        Read off the class rather than typed out, because the whole point of the
+        base is that the list cannot fall out of date. `build_program_from` and
+        the test that guards it both work from this.
+        """
+        return [field.name for field in SharedProgramFields._meta.local_fields]
+
+    def shared_values(self):
+        """This record's shared answers, as keyword arguments for the other model."""
+        return {name: getattr(self, name) for name in self.shared_field_names()}
+
+    @property
+    def age_range_display(self):
+        if self.age_min and self.age_max:
+            return f"Ages {self.age_min}-{self.age_max}"
+        if self.age_min:
+            return f"Ages {self.age_min} and up"
+        if self.age_max:
+            return f"Through age {self.age_max}"
+        return ""
+
+    @property
+    def step_up_display(self):
+        """The sentence a program page shows, empty if they are not a provider.
+
+        A provider who is direct pay but has told us nothing about which
+        scholarships still gets the headline, because that alone answers the
+        question most families are asking.
+        """
+        if not self.step_up_direct_pay:
+            return ""
+        scholarships = [
+            name
+            for name, ticked in [("PEP", self.step_up_pep), ("FES-UA", self.step_up_fes_ua)]
+            if ticked
+        ]
+        if not scholarships:
+            return "Step Up direct pay"
+        return f"Step Up direct pay ({', '.join(scholarships)})"
+
+    @property
+    def weekday_list(self):
+        return split_weekdays(self.meeting_days)
+
+    @property
+    def meeting_days_display(self):
+        """The days as a family reads them: Tuesdays and Thursdays."""
+        names = [f"{WEEKDAY_NAMES[code]}s" for code in self.weekday_list]
+        if len(names) > 2:
+            return ", ".join(names[:-1]) + f" and {names[-1]}"
+        return " and ".join(names)
+
+    @property
+    def meeting_time_display(self):
+        if self.meeting_time_start and self.meeting_time_end:
+            return f"{_clock(self.meeting_time_start)} to {_clock(self.meeting_time_end)}"
+        if self.meeting_time_start:
+            return f"from {_clock(self.meeting_time_start)}"
+        if self.meeting_time_end:
+            return f"until {_clock(self.meeting_time_end)}"
+        return ""
+
+    @property
+    def season_display(self):
+        if self.season_start and self.season_end:
+            return (
+                f"{self.season_start.strftime('%B')} through {self.season_end.strftime('%B')}"
+            )
+        if self.season_start:
+            return f"from {_date(self.season_start)}"
+        if self.season_end:
+            return f"until {_date(self.season_end)}"
+        return ""
+
+    @property
+    def when_display(self):
+        """One line answering "when does this meet", however much we know."""
+        parts = [self.meeting_days_display, self.meeting_time_display, self.season_display]
+        return ", ".join(part for part in parts if part)
+
+    @property
+    def enrollment_display(self):
+        """When you can sign up, in words, or the notes if there are no dates."""
+        if self.enrollment_opens and self.enrollment_closes:
+            return f"{_date(self.enrollment_opens)} to {_date(self.enrollment_closes, year=True)}"
+        if self.enrollment_closes:
+            return f"closes {_date(self.enrollment_closes, year=True)}"
+        if self.enrollment_opens:
+            return f"opens {_date(self.enrollment_opens, year=True)}"
+        return self.enrollment_notes
+
+    @property
+    def cost_display(self):
+        """The headline and the detail, in whichever combination exists."""
+        headline = self.get_cost_basis_display() if self.cost_basis else ""
+        detail = self.cost_notes.strip()
+        if headline and detail:
+            # "Free" beside a note saying what the note says would be noise; a
+            # note that is only a number reads better with the headline on it.
+            return detail if headline.lower() in detail.lower() else f"{headline} — {detail}"
+        return detail or headline
+
+    @property
+    def is_online_option(self):
+        return self.delivery in {self.Delivery.ONLINE, self.Delivery.HYBRID}
+
+
 class ProgramQuerySet(models.QuerySet):
+    """The filters the listing page is built from.
+
+    Every one of them is a no-op when handed nothing, so the view can apply the
+    whole set unconditionally and let an absent query parameter mean "do not
+    narrow by this" rather than growing an `if` per filter.
+    """
+
     def published(self):
         return self.filter(status=Program.Status.PUBLISHED)
 
+    def meeting_on(self, day):
+        """Programs that meet on a given weekday.
 
-class Program(SanitizedRichTextMixin, models.Model):
-    """A single homeschool program. The core record of the directory."""
+        A substring test, which is exact here and only here: see `WeekdaysField`
+        for why no day's code can match another's.
+        """
+        if day not in WEEKDAY_NAMES:
+            return self
+        return self.filter(meeting_days__contains=day)
+
+    def with_faith_basis(self, basis):
+        if basis not in SharedProgramFields.Faith.values:
+            return self
+        return self.filter(faith_basis=basis)
+
+    def online(self):
+        return self.filter(
+            delivery__in=[SharedProgramFields.Delivery.ONLINE, SharedProgramFields.Delivery.HYBRID]
+        )
+
+    def direct_pay(self):
+        return self.filter(step_up_direct_pay=True)
+
+    def serving_age(self, age):
+        """Programs that could take a child of this age.
+
+        A blank age bound means "we do not know", and an unknown bound has to
+        widen the answer rather than narrow it — dropping every program that
+        never filled in an age range would hide most of the directory from the
+        one filter most likely to be used.
+        """
+        try:
+            age = int(age)
+        except (TypeError, ValueError):
+            return self
+        return self.filter(
+            Q(age_min__lte=age) | Q(age_min__isnull=True),
+            Q(age_max__gte=age) | Q(age_max__isnull=True),
+        )
+
+    def tagged(self, slugs):
+        """Programs carrying every one of these tags, not any of them.
+
+        Each tag a family adds should narrow the list. Chaining a filter per tag
+        is what makes that true: a single `tags__slug__in` would widen it, and
+        "beginner and Saturdays" would return every beginner class in the county.
+        """
+        programs = self
+        for slug in dict.fromkeys(slug for slug in slugs if slug):
+            programs = programs.filter(tags__slug=slug)
+        return programs
+
+
+class Program(SanitizedRichTextMixin, SharedProgramFields):
+    """A single homeschool program. The core record of the directory.
+
+    Most of its fields are on `SharedProgramFields`, alongside `Submission`.
+    What is declared here is what a published record has and a registration does
+    not: a slug, a status, a rich text description, and our own record keeping.
+    """
 
     class Status(models.TextChoices):
         DRAFT = "draft", "Draft — not visible on the site"
@@ -197,60 +800,9 @@ class Program(SanitizedRichTextMixin, models.Model):
         "how someone finds a program they could not have guessed the category of.",
     )
 
-    website = models.URLField(blank=True)
-    facebook = models.URLField(
-        "Facebook page",
-        blank=True,
-        help_text="The full address of their Facebook page or group, "
-        "e.g. 'https://facebook.com/groups/example'.",
-    )
-    email = models.EmailField(blank=True, help_text="The program's general contact address.")
-    phone = models.CharField(max_length=32, blank=True)
-
-    # Where a program meets is `ProgramLocation`, edited inline below. It is a
-    # table rather than a text field because the next question families ask is
-    # "how far is that from me", and no amount of free text answers it.
-
-    serves_grades = models.CharField(
-        max_length=80,
-        blank=True,
-        help_text="Free text, e.g. 'K–8' or 'high school only'. Leave blank if it varies.",
-    )
-    age_min = models.PositiveSmallIntegerField(null=True, blank=True)
-    age_max = models.PositiveSmallIntegerField(null=True, blank=True)
-
-    cost_notes = models.TextField(
-        blank=True,
-        help_text="Free text — fee structures never fit a single number. "
-        "e.g. '$45/semester per family, plus a $20 materials fee'.",
-    )
-
-    # Step Up For Students runs Florida's scholarships through a marketplace
-    # called EMA. A direct pay provider is one the family can pay from their
-    # scholarship account without laying out the money first, which for many
-    # families decides whether a program is affordable at all. The two
-    # scholarships are separate approvals, so a provider can be one and not
-    # the other.
-    step_up_direct_pay = models.BooleanField(
-        "Step Up direct pay provider",
-        default=False,
-        help_text="Tick if families can pay this program directly through "
-        "Step Up For Students' EMA marketplace.",
-    )
-    step_up_pep = models.BooleanField(
-        "direct pay for PEP",
-        default=False,
-        help_text="Personalized Education Program.",
-    )
-    step_up_fes_ua = models.BooleanField(
-        "direct pay for FES-UA",
-        default=False,
-        help_text="Family Empowerment Scholarship for Students with Unique Abilities.",
-    )
-    meeting_schedule = models.TextField(
-        blank=True,
-        help_text="Free text, e.g. 'Tuesdays 9–noon, September through May'.",
-    )
+    # Where a program meets is `ProgramLocation`, edited inline in the admin. It
+    # is a table rather than a text field because the next question families ask
+    # is "how far is that from me", and no amount of free text answers it.
 
     status = models.CharField(
         max_length=16,
@@ -289,35 +841,6 @@ class Program(SanitizedRichTextMixin, models.Model):
         return self.status == self.Status.PUBLISHED
 
     @property
-    def age_range_display(self):
-        if self.age_min and self.age_max:
-            return f"Ages {self.age_min}–{self.age_max}"
-        if self.age_min:
-            return f"Ages {self.age_min} and up"
-        if self.age_max:
-            return f"Through age {self.age_max}"
-        return ""
-
-    @property
-    def step_up_display(self):
-        """The sentence a program page shows, empty if they are not a provider.
-
-        A provider who is direct pay but has told us nothing about which
-        scholarships still gets the headline, because that alone answers the
-        question most families are asking.
-        """
-        if not self.step_up_direct_pay:
-            return ""
-        scholarships = [
-            name
-            for name, ticked in [("PEP", self.step_up_pep), ("FES-UA", self.step_up_fes_ua)]
-            if ticked
-        ]
-        if not scholarships:
-            return "Step Up direct pay"
-        return f"Step Up direct pay ({', '.join(scholarships)})"
-
-    @property
     def location_list(self):
         """The addresses, as a family should read them.
 
@@ -333,6 +856,26 @@ class Program(SanitizedRichTextMixin, models.Model):
         """The first address, for listings that only have room for one."""
         locations = self.location_list
         return locations[0] if locations else ""
+
+    @property
+    def answered_questions(self):
+        """The tag questions this program answered, as (question, answers) pairs.
+
+        A program page shows "Ability level: beginner, intermediate" rather than
+        loose chips, because an answer to a question read out of context is not
+        obviously an answer to anything. Callers rendering more than one program
+        want `prefetch_related("tags__group")`.
+        """
+        answers = {}
+        for tag in self.tags.all():
+            if tag.group_id:
+                answers.setdefault(tag.group, []).append(tag)
+        return sorted(answers.items(), key=lambda pair: (pair[0].sort_order, pair[0].name))
+
+    @property
+    def plain_tag_list(self):
+        """The ordinary subject tags, which are chips and links like always."""
+        return [tag for tag in self.tags.all() if not tag.group_id]
 
     def mark_verified(self, on=None):
         self.last_verified_on = on or timezone.localdate()
@@ -624,7 +1167,7 @@ def validate_logo_size(value):
         raise ValidationError("That image is larger than 2 MB. Please upload a smaller file.")
 
 
-class Submission(models.Model):
+class Submission(SharedProgramFields):
     """A record waiting on approval, from one of two doors.
 
     A **registration** is a provider describing their own program. It mirrors
@@ -640,6 +1183,10 @@ class Submission(models.Model):
     people who run it to register it properly themselves.
 
     Both land in one queue. She should not have to remember to check two.
+
+    Everything a registration answers the same way a published program does is on
+    `SharedProgramFields`, which is what makes approval a copy rather than a
+    transcription.
     """
 
     class Kind(models.TextChoices):
@@ -682,25 +1229,9 @@ class Submission(models.Model):
     )
     tags = models.ManyToManyField(Tag, blank=True)
 
-    website = models.URLField(blank=True)
-    facebook = models.URLField("Facebook page", blank=True)
-    email = models.EmailField(blank=True)
-    phone = models.CharField(max_length=32, blank=True)
-
     # Where they meet is `SubmissionLocation`. The registration form resolves
     # each address as it is typed, so what arrives is already a point on a map
     # rather than a paragraph somebody has to interpret later.
-
-    serves_grades = models.CharField(max_length=80, blank=True)
-    age_min = models.PositiveSmallIntegerField(null=True, blank=True)
-    age_max = models.PositiveSmallIntegerField(null=True, blank=True)
-
-    cost_notes = models.TextField(blank=True)
-    meeting_schedule = models.TextField(blank=True)
-
-    step_up_direct_pay = models.BooleanField("Step Up direct pay provider", default=False)
-    step_up_pep = models.BooleanField("direct pay for PEP", default=False)
-    step_up_fes_ua = models.BooleanField("direct pay for FES-UA", default=False)
 
     logo = models.ImageField(
         upload_to="submissions/logos/",
