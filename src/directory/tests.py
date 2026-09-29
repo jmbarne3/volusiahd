@@ -2207,7 +2207,7 @@ class TagQuestionTests(TestCase):
         self.assertNotIn("question_unused", page)
 
     def test_a_program_page_lists_an_answer_against_its_question(self):
-        """"Varsity" on its own does not say what it is an answer to."""
+        """An answer on its own does not say what it is an answer to."""
         program = Program.objects.create(
             name="Coastal United",
             slug="coastal-united",
@@ -2279,9 +2279,7 @@ class ListingFilterTests(TestCase):
         Dropping every program that left its age range blank would hide most of
         the directory behind the filter most likely to be used.
         """
-        self.assertEqual(
-            self._names(age="12"), ["No Idea", "Saturday League", "Thursday Club"]
-        )
+        self.assertEqual(self._names(age="12"), ["No Idea", "Saturday League", "Thursday Club"])
         # Outside the one range we know about, that program drops out and the
         # ones that never said still stand.
         self.assertEqual(self._names(age="3"), ["No Idea", "Saturday League"])
@@ -2465,6 +2463,4 @@ class SeedTaxonomyTests(TestCase):
         """
         Category.objects.create(name="Co-operatives, as we call them", slug=q.CO_OPS)
         call_command("seed_taxonomy", stdout=StringIO())
-        self.assertEqual(
-            Category.objects.get(slug=q.CO_OPS).name, "Co-operatives, as we call them"
-        )
+        self.assertEqual(Category.objects.get(slug=q.CO_OPS).name, "Co-operatives, as we call them")

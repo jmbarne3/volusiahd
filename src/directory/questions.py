@@ -80,9 +80,7 @@ def _all_but(*slugs):
 
 # The four types that list classes under a larger host: the listing is the class,
 # and the host is a separate thing worth naming.
-_CLASSES_UNDER_A_HOST = frozenset(
-    {CORE_ACADEMICS, ARTS_AND_CRAFTS, PERFORMING_ARTS, ENRICHMENT}
-)
+_CLASSES_UNDER_A_HOST = frozenset({CORE_ACADEMICS, ARTS_AND_CRAFTS, PERFORMING_ARTS, ENRICHMENT})
 
 # The three that come to you, or meet wherever suits, rather than at an address.
 _COMES_TO_YOU = frozenset({TESTING, SPECIAL_NEEDS, TUTORING})

@@ -642,9 +642,7 @@ class SharedProgramFields(models.Model):
     @property
     def season_display(self):
         if self.season_start and self.season_end:
-            return (
-                f"{self.season_start.strftime('%B')} through {self.season_end.strftime('%B')}"
-            )
+            return f"{self.season_start.strftime('%B')} through {self.season_end.strftime('%B')}"
         if self.season_start:
             return f"from {_date(self.season_start)}"
         if self.season_end:

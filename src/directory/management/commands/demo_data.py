@@ -229,8 +229,7 @@ class Command(BaseCommand):
 
     def _build(self):
         headings = {
-            category.slug: category
-            for category in Category.objects.prefetch_related("tags__group")
+            category.slug: category for category in Category.objects.prefetch_related("tags__group")
         }
         made = 0
         for slug, entries in PROGRAMS.items():

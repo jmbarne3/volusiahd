@@ -172,19 +172,22 @@ QUESTIONS = [
 
 # Ordinary subject tags, only where the field list spells them out.
 SUBJECT_TAGS = [
-    (q.ENRICHMENT, [
-        "Baking and cooking",
-        "STEM",
-        "Life skills",
-        "Nature and outdoor skills",
-        "Business and professional development",
-        "Book club",
-        "Gaming",
-        "Foreign language",
-        "Bible study",
-        "Youth group",
-        "Scouting",
-    ]),
+    (
+        q.ENRICHMENT,
+        [
+            "Baking and cooking",
+            "STEM",
+            "Life skills",
+            "Nature and outdoor skills",
+            "Business and professional development",
+            "Book club",
+            "Gaming",
+            "Foreign language",
+            "Bible study",
+            "Youth group",
+            "Scouting",
+        ],
+    ),
     (q.PERFORMING_ARTS, ["Dance", "Theater", "Music lessons"]),
 ]
 

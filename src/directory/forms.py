@@ -390,9 +390,7 @@ class ProgramRegistrationForm(BaseSubmissionForm):
                 # A question nobody is offered an answer to is not a question.
                 continue
             self.question_groups.append(group)
-            field_class = (
-                AnswerMultipleChoiceField if group.allows_several else AnswerChoiceField
-            )
+            field_class = AnswerMultipleChoiceField if group.allows_several else AnswerChoiceField
             widget = ScopedCheckboxes if group.allows_several else ScopedRadios
             field = field_class(
                 queryset=Tag.objects.filter(pk__in=[tag.pk for tag in answers]).prefetch_related(
@@ -444,9 +442,7 @@ class ProgramRegistrationForm(BaseSubmissionForm):
         for group in self.question_groups:
             if name == self.question_field_name(group):
                 return frozenset(
-                    category.slug
-                    for tag in group.tags.all()
-                    for category in tag.categories.all()
+                    category.slug for tag in group.tags.all() for category in tag.categories.all()
                 )
         return None
 
