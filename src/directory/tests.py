@@ -2610,3 +2610,78 @@ class TaxonomyFixtureTests(TestCase):
         call_command("loaddata", "taxonomy", verbosity=0)
         codes = [colour_code(c) for c in Category.objects.all()]
         self.assertEqual(len(set(codes)), len(codes))
+
+
+class FixtureCollisionTests(TestCase):
+    """Loading the baseline over a database that disagrees with it.
+
+    Written after an outage. The fixture used to carry primary keys, so loading
+    it over a database whose `co-ops` row sat on a different key raised
+    `UNIQUE constraint failed: directory_category.slug` — the fixture writing a
+    slug onto one key while another key already held it. Because `serve.sh` runs
+    under `set -e` and `manage.py deploy` runs on the way up, the container
+    exited, gunicorn never started, and the site went down.
+
+    The rehearsal that missed it loaded the fixture into a *cleaned* database and
+    proved only that the happy path worked. These load it over the mess.
+    """
+
+    def test_it_loads_over_a_matching_slug_on_a_different_primary_key(self):
+        """The exact shape that took the site down."""
+        # Occupy the low keys with rows whose slugs the fixture also uses, so a
+        # key-based load would collide on every one of them.
+        for n, slug in enumerate(["parent-support-groups", "co-ops", "field-trips"], start=1):
+            Category.objects.create(pk=n, name=f"Old {slug}", slug=slug)
+
+        call_command("deploy", stdout=StringIO())
+
+        self.assertEqual(Category.objects.filter(slug=q.CO_OPS).count(), 1)
+        self.assertEqual(Category.objects.get(slug=q.CO_OPS).name, "Co-ops")
+        self.assertTrue(set(q.EVERY) <= set(Category.objects.values_list("slug", flat=True)))
+
+    def test_it_loads_over_a_taxonomy_from_an_older_scheme(self):
+        """Headings we no longer use are left alone, not collided with.
+
+        Production carried twenty-four headings from the taxonomy before this
+        one, eight of whose slugs the new set reuses. The deploy has to bring the
+        thirteen up to date and leave the strangers where they are, rather than
+        refusing to start.
+        """
+        older = ["book-clubs", "stem-programs", "dance", "co-ops", "microschools"]
+        for n, slug in enumerate(older, start=1):
+            Category.objects.create(pk=n, name=f"Old {slug}", slug=slug)
+
+        call_command("deploy", stdout=StringIO())
+
+        # The two the new scheme also names were updated in place.
+        self.assertEqual(Category.objects.get(slug=q.CO_OPS).name, "Co-ops")
+        self.assertEqual(Category.objects.get(slug=q.MICROSCHOOLS).sort_order, 30)
+        # The three it does not name were left for somebody to tidy up by hand.
+        for slug in ["book-clubs", "stem-programs", "dance"]:
+            with self.subTest(slug=slug):
+                self.assertTrue(Category.objects.filter(slug=slug).exists())
+
+    def test_a_tag_keeps_its_question_when_the_tag_already_existed(self):
+        """Tags and questions are matched by slug too, not only categories."""
+        Tag.objects.create(pk=99, name="Something else entirely", slug="beginner")
+
+        call_command("deploy", stdout=StringIO())
+
+        tag = Tag.objects.get(slug="beginner")
+        self.assertEqual(tag.name, "Beginner")
+        self.assertEqual(tag.group.slug, "ability-level")
+
+    def test_the_fixture_names_rows_by_slug_rather_than_by_key(self):
+        """The property the three tests above depend on, asserted directly.
+
+        Regenerating the fixture without `--natural-primary --natural-foreign`
+        would put the keys back and re-arm the outage, and every test above would
+        still pass on an empty database.
+        """
+        rows = json.loads(
+            (settings.BASE_DIR / "src" / "directory" / "fixtures" / "taxonomy.json").read_text()
+        )
+        self.assertTrue(rows)
+        for row in rows:
+            with self.subTest(model=row["model"], slug=row["fields"].get("slug")):
+                self.assertIsNone(row.get("pk"), "fixture rows must not carry primary keys")

@@ -1,7 +1,6 @@
 [
 {
   "model": "directory.taggroup",
-  "pk": 1,
   "fields": {
     "name": "Ability level",
     "slug": "ability-level",
@@ -12,7 +11,6 @@
 },
 {
   "model": "directory.taggroup",
-  "pk": 2,
   "fields": {
     "name": "Competition or recreational",
     "slug": "program-style",
@@ -23,7 +21,6 @@
 },
 {
   "model": "directory.taggroup",
-  "pk": 3,
   "fields": {
     "name": "Parent involvement",
     "slug": "parent-involvement",
@@ -34,7 +31,6 @@
 },
 {
   "model": "directory.taggroup",
-  "pk": 4,
   "fields": {
     "name": "Subjects offered",
     "slug": "subjects-offered",
@@ -45,167 +41,182 @@
 },
 {
   "model": "directory.tag",
-  "pk": 1,
   "fields": {
     "name": "Beginner",
     "slug": "beginner",
     "description": "",
-    "group": 1
+    "group": [
+      "ability-level"
+    ]
   }
 },
 {
   "model": "directory.tag",
-  "pk": 2,
   "fields": {
     "name": "Intermediate",
     "slug": "intermediate",
     "description": "",
-    "group": 1
+    "group": [
+      "ability-level"
+    ]
   }
 },
 {
   "model": "directory.tag",
-  "pk": 3,
   "fields": {
     "name": "Advanced",
     "slug": "advanced",
     "description": "",
-    "group": 1
+    "group": [
+      "ability-level"
+    ]
   }
 },
 {
   "model": "directory.tag",
-  "pk": 4,
   "fields": {
     "name": "Junior varsity",
     "slug": "junior-varsity",
     "description": "",
-    "group": 1
+    "group": [
+      "ability-level"
+    ]
   }
 },
 {
   "model": "directory.tag",
-  "pk": 5,
   "fields": {
     "name": "Varsity",
     "slug": "varsity",
     "description": "",
-    "group": 1
+    "group": [
+      "ability-level"
+    ]
   }
 },
 {
   "model": "directory.tag",
-  "pk": 6,
   "fields": {
     "name": "Competition team",
     "slug": "competition-team",
     "description": "",
-    "group": 2
+    "group": [
+      "program-style"
+    ]
   }
 },
 {
   "model": "directory.tag",
-  "pk": 7,
   "fields": {
     "name": "Skill-based or recreational",
     "slug": "skill-based-or-recreational",
     "description": "",
-    "group": 2
+    "group": [
+      "program-style"
+    ]
   }
 },
 {
   "model": "directory.tag",
-  "pk": 8,
   "fields": {
     "name": "Parents must attend",
     "slug": "parents-must-attend",
     "description": "",
-    "group": 3
+    "group": [
+      "parent-involvement"
+    ]
   }
 },
 {
   "model": "directory.tag",
-  "pk": 9,
   "fields": {
     "name": "Parents may attend",
     "slug": "parents-may-attend",
     "description": "",
-    "group": 3
+    "group": [
+      "parent-involvement"
+    ]
   }
 },
 {
   "model": "directory.tag",
-  "pk": 10,
   "fields": {
     "name": "Parents must help",
     "slug": "parents-must-help",
     "description": "",
-    "group": 3
+    "group": [
+      "parent-involvement"
+    ]
   }
 },
 {
   "model": "directory.tag",
-  "pk": 11,
   "fields": {
     "name": "Drop-off allowed",
     "slug": "drop-off-allowed",
     "description": "",
-    "group": 3
+    "group": [
+      "parent-involvement"
+    ]
   }
 },
 {
   "model": "directory.tag",
-  "pk": 12,
   "fields": {
     "name": "Drop-off only",
     "slug": "drop-off-only",
     "description": "",
-    "group": 3
+    "group": [
+      "parent-involvement"
+    ]
   }
 },
 {
   "model": "directory.tag",
-  "pk": 13,
   "fields": {
     "name": "Families stay all day",
     "slug": "families-stay-all-day",
     "description": "",
-    "group": 3
+    "group": [
+      "parent-involvement"
+    ]
   }
 },
 {
   "model": "directory.tag",
-  "pk": 14,
   "fields": {
     "name": "Families stay part of the day",
     "slug": "families-stay-part-of-the-day",
     "description": "",
-    "group": 3
+    "group": [
+      "parent-involvement"
+    ]
   }
 },
 {
   "model": "directory.tag",
-  "pk": 15,
   "fields": {
     "name": "Core subjects",
     "slug": "core-subjects",
     "description": "",
-    "group": 4
+    "group": [
+      "subjects-offered"
+    ]
   }
 },
 {
   "model": "directory.tag",
-  "pk": 16,
   "fields": {
     "name": "Electives",
     "slug": "electives",
     "description": "",
-    "group": 4
+    "group": [
+      "subjects-offered"
+    ]
   }
 },
 {
   "model": "directory.tag",
-  "pk": 17,
   "fields": {
     "name": "Baking and cooking",
     "slug": "baking-and-cooking",
@@ -215,7 +226,6 @@
 },
 {
   "model": "directory.tag",
-  "pk": 18,
   "fields": {
     "name": "STEM",
     "slug": "stem",
@@ -225,7 +235,6 @@
 },
 {
   "model": "directory.tag",
-  "pk": 19,
   "fields": {
     "name": "Life skills",
     "slug": "life-skills",
@@ -235,7 +244,6 @@
 },
 {
   "model": "directory.tag",
-  "pk": 20,
   "fields": {
     "name": "Nature and outdoor skills",
     "slug": "nature-and-outdoor-skills",
@@ -245,7 +253,6 @@
 },
 {
   "model": "directory.tag",
-  "pk": 21,
   "fields": {
     "name": "Business and professional development",
     "slug": "business-and-professional-development",
@@ -255,7 +262,6 @@
 },
 {
   "model": "directory.tag",
-  "pk": 22,
   "fields": {
     "name": "Book club",
     "slug": "book-club",
@@ -265,7 +271,6 @@
 },
 {
   "model": "directory.tag",
-  "pk": 23,
   "fields": {
     "name": "Gaming",
     "slug": "gaming",
@@ -275,7 +280,6 @@
 },
 {
   "model": "directory.tag",
-  "pk": 24,
   "fields": {
     "name": "Foreign language",
     "slug": "foreign-language",
@@ -285,7 +289,6 @@
 },
 {
   "model": "directory.tag",
-  "pk": 25,
   "fields": {
     "name": "Bible study",
     "slug": "bible-study",
@@ -295,7 +298,6 @@
 },
 {
   "model": "directory.tag",
-  "pk": 26,
   "fields": {
     "name": "Youth group",
     "slug": "youth-group",
@@ -305,7 +307,6 @@
 },
 {
   "model": "directory.tag",
-  "pk": 27,
   "fields": {
     "name": "Scouting",
     "slug": "scouting",
@@ -315,7 +316,6 @@
 },
 {
   "model": "directory.tag",
-  "pk": 28,
   "fields": {
     "name": "Dance",
     "slug": "dance",
@@ -325,7 +325,6 @@
 },
 {
   "model": "directory.tag",
-  "pk": 29,
   "fields": {
     "name": "Theater",
     "slug": "theater",
@@ -335,7 +334,6 @@
 },
 {
   "model": "directory.tag",
-  "pk": 30,
   "fields": {
     "name": "Music lessons",
     "slug": "music-lessons",
@@ -345,7 +343,6 @@
 },
 {
   "model": "directory.category",
-  "pk": 1,
   "fields": {
     "name": "Co-ops",
     "slug": "co-ops",
@@ -353,14 +350,17 @@
     "sort_order": 10,
     "icon": "groups",
     "tags": [
-      13,
-      14
+      [
+        "families-stay-all-day"
+      ],
+      [
+        "families-stay-part-of-the-day"
+      ]
     ]
   }
 },
 {
   "model": "directory.category",
-  "pk": 2,
   "fields": {
     "name": "Core academic classes",
     "slug": "core-academics",
@@ -368,17 +368,26 @@
     "sort_order": 20,
     "icon": "school",
     "tags": [
-      11,
-      12,
-      9,
-      8,
-      10
+      [
+        "drop-off-allowed"
+      ],
+      [
+        "drop-off-only"
+      ],
+      [
+        "parents-may-attend"
+      ],
+      [
+        "parents-must-attend"
+      ],
+      [
+        "parents-must-help"
+      ]
     ]
   }
 },
 {
   "model": "directory.category",
-  "pk": 3,
   "fields": {
     "name": "Microschools and hybrid programs",
     "slug": "microschools",
@@ -386,14 +395,17 @@
     "sort_order": 30,
     "icon": "cottage",
     "tags": [
-      15,
-      16
+      [
+        "core-subjects"
+      ],
+      [
+        "electives"
+      ]
     ]
   }
 },
 {
   "model": "directory.category",
-  "pk": 4,
   "fields": {
     "name": "Enrichment, electives and clubs",
     "slug": "enrichment-and-clubs",
@@ -401,31 +413,68 @@
     "sort_order": 40,
     "icon": "extension",
     "tags": [
-      3,
-      17,
-      1,
-      25,
-      22,
-      21,
-      11,
-      12,
-      24,
-      23,
-      2,
-      19,
-      20,
-      9,
-      8,
-      10,
-      18,
-      27,
-      26
+      [
+        "advanced"
+      ],
+      [
+        "baking-and-cooking"
+      ],
+      [
+        "beginner"
+      ],
+      [
+        "bible-study"
+      ],
+      [
+        "book-club"
+      ],
+      [
+        "business-and-professional-development"
+      ],
+      [
+        "drop-off-allowed"
+      ],
+      [
+        "drop-off-only"
+      ],
+      [
+        "foreign-language"
+      ],
+      [
+        "gaming"
+      ],
+      [
+        "intermediate"
+      ],
+      [
+        "life-skills"
+      ],
+      [
+        "nature-and-outdoor-skills"
+      ],
+      [
+        "parents-may-attend"
+      ],
+      [
+        "parents-must-attend"
+      ],
+      [
+        "parents-must-help"
+      ],
+      [
+        "stem"
+      ],
+      [
+        "scouting"
+      ],
+      [
+        "youth-group"
+      ]
     ]
   }
 },
 {
   "model": "directory.category",
-  "pk": 5,
   "fields": {
     "name": "Sports and recreation",
     "slug": "sports-and-recreation",
@@ -433,24 +482,47 @@
     "sort_order": 50,
     "icon": "sports_soccer",
     "tags": [
-      3,
-      1,
-      6,
-      11,
-      12,
-      2,
-      4,
-      9,
-      8,
-      10,
-      7,
-      5
+      [
+        "advanced"
+      ],
+      [
+        "beginner"
+      ],
+      [
+        "competition-team"
+      ],
+      [
+        "drop-off-allowed"
+      ],
+      [
+        "drop-off-only"
+      ],
+      [
+        "intermediate"
+      ],
+      [
+        "junior-varsity"
+      ],
+      [
+        "parents-may-attend"
+      ],
+      [
+        "parents-must-attend"
+      ],
+      [
+        "parents-must-help"
+      ],
+      [
+        "skill-based-or-recreational"
+      ],
+      [
+        "varsity"
+      ]
     ]
   }
 },
 {
   "model": "directory.category",
-  "pk": 6,
   "fields": {
     "name": "Performing arts",
     "slug": "performing-arts",
@@ -458,23 +530,44 @@
     "sort_order": 60,
     "icon": "theater_comedy",
     "tags": [
-      3,
-      1,
-      28,
-      11,
-      12,
-      2,
-      30,
-      9,
-      8,
-      10,
-      29
+      [
+        "advanced"
+      ],
+      [
+        "beginner"
+      ],
+      [
+        "dance"
+      ],
+      [
+        "drop-off-allowed"
+      ],
+      [
+        "drop-off-only"
+      ],
+      [
+        "intermediate"
+      ],
+      [
+        "music-lessons"
+      ],
+      [
+        "parents-may-attend"
+      ],
+      [
+        "parents-must-attend"
+      ],
+      [
+        "parents-must-help"
+      ],
+      [
+        "theater"
+      ]
     ]
   }
 },
 {
   "model": "directory.category",
-  "pk": 7,
   "fields": {
     "name": "Arts and crafts",
     "slug": "arts-and-crafts",
@@ -482,20 +575,35 @@
     "sort_order": 70,
     "icon": "palette",
     "tags": [
-      3,
-      1,
-      11,
-      12,
-      2,
-      9,
-      8,
-      10
+      [
+        "advanced"
+      ],
+      [
+        "beginner"
+      ],
+      [
+        "drop-off-allowed"
+      ],
+      [
+        "drop-off-only"
+      ],
+      [
+        "intermediate"
+      ],
+      [
+        "parents-may-attend"
+      ],
+      [
+        "parents-must-attend"
+      ],
+      [
+        "parents-must-help"
+      ]
     ]
   }
 },
 {
   "model": "directory.category",
-  "pk": 8,
   "fields": {
     "name": "Tutoring",
     "slug": "tutoring",
@@ -507,7 +615,6 @@
 },
 {
   "model": "directory.category",
-  "pk": 9,
   "fields": {
     "name": "Testing and evaluation",
     "slug": "testing-and-evaluation",
@@ -519,7 +626,6 @@
 },
 {
   "model": "directory.category",
-  "pk": 10,
   "fields": {
     "name": "Special needs support",
     "slug": "special-needs-support",
@@ -531,7 +637,6 @@
 },
 {
   "model": "directory.category",
-  "pk": 11,
   "fields": {
     "name": "Field trips",
     "slug": "field-trips",
@@ -543,7 +648,6 @@
 },
 {
   "model": "directory.category",
-  "pk": 12,
   "fields": {
     "name": "Play and social groups",
     "slug": "play-and-social-groups",
@@ -555,7 +659,6 @@
 },
 {
   "model": "directory.category",
-  "pk": 13,
   "fields": {
     "name": "Parent support groups",
     "slug": "parent-support-groups",

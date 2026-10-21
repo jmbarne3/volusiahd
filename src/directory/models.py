@@ -178,6 +178,26 @@ class SanitizedRichTextMixin(models.Model):
         return super().save(*args, **kwargs)
 
 
+class SlugNaturalKeyManager(models.Manager):
+    """Lets a fixture name a row by its slug instead of its primary key.
+
+    This exists because of an outage. `manage.py deploy` loads the baseline
+    taxonomy on every deployment, and the fixture used to carry primary keys. A
+    database whose `co-ops` row sat on a different key than the fixture's `co-ops`
+    row therefore hit `UNIQUE constraint failed: directory_category.slug` — the
+    fixture trying to write a slug onto one key while another key already held it.
+    `serve.sh` runs under `set -e`, so the container exited, gunicorn never
+    started, and the site went down.
+
+    Matching on the slug makes the load idempotent against any database rather
+    than only against one that already agrees with us. A row with that slug is
+    updated in place, whatever key it is on; a row with a new slug is created.
+    """
+
+    def get_by_natural_key(self, slug):
+        return self.get(slug=slug)
+
+
 class Category(models.Model):
     name = models.CharField(max_length=80, unique=True)
     slug = models.SlugField(max_length=80, unique=True, help_text="Used in the web address.")
@@ -211,6 +231,8 @@ class Category(models.Model):
         "ours to apply here in the admin and is never offered on the public form.",
     )
 
+    objects = SlugNaturalKeyManager()
+
     class Meta:
         ordering = ["sort_order", "name"]
         verbose_name_plural = "categories"
@@ -220,6 +242,13 @@ class Category(models.Model):
 
     def get_absolute_url(self):
         return reverse("directory:category", kwargs={"slug": self.slug})
+
+    def natural_key(self):
+        return (self.slug,)
+
+    # Serialized after the tags it offers, so a fixture loaded into an empty
+    # database has something to point its many-to-many at.
+    natural_key.dependencies = ["directory.tag"]
 
     def question_groups(self):
         """The tag questions this heading asks, each with only its own answers.
@@ -282,6 +311,8 @@ class TagGroup(models.Model):
         help_text="Lower numbers appear first on the form.",
     )
 
+    objects = SlugNaturalKeyManager()
+
     class Meta:
         ordering = ["sort_order", "name"]
         verbose_name = "tag question"
@@ -289,6 +320,9 @@ class TagGroup(models.Model):
 
     def __str__(self):
         return self.name
+
+    def natural_key(self):
+        return (self.slug,)
 
 
 class Tag(models.Model):
@@ -333,6 +367,8 @@ class Tag(models.Model):
         "one of the answers to that question, asked of any heading that offers it.",
     )
 
+    objects = SlugNaturalKeyManager()
+
     class Meta:
         ordering = ["name"]
 
@@ -348,6 +384,12 @@ class Tag(models.Model):
 
     def get_absolute_url(self):
         return reverse("directory:tag", kwargs={"slug": self.slug})
+
+    def natural_key(self):
+        return (self.slug,)
+
+    # A tag names its question, so the questions have to be loaded first.
+    natural_key.dependencies = ["directory.taggroup"]
 
 
 def _clock(value):
