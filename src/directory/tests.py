@@ -2464,3 +2464,149 @@ class SeedTaxonomyTests(TestCase):
         Category.objects.create(name="Co-operatives, as we call them", slug=q.CO_OPS)
         call_command("seed_taxonomy", stdout=StringIO())
         self.assertEqual(Category.objects.get(slug=q.CO_OPS).name, "Co-operatives, as we call them")
+
+
+def taxonomy_snapshot():
+    """The whole taxonomy as comparable data, with primary keys left out.
+
+    Primary keys are deliberately absent: what has to match between the fixture
+    and the command that generates it is the vocabulary, not the order rows
+    happened to be written in.
+    """
+    return {
+        "categories": sorted(
+            (c.slug, c.name, c.sort_order, c.icon, tuple(sorted(t.name for t in c.tags.all())))
+            for c in Category.objects.all()
+        ),
+        "tags": sorted(
+            (t.name, t.slug, t.group.slug if t.group else None) for t in Tag.objects.all()
+        ),
+        "questions": sorted(
+            (g.slug, g.name, g.allows_several, g.sort_order) for g in TagGroup.objects.all()
+        ),
+    }
+
+
+class DeployCommandTests(TestCase):
+    """What runs against the database every time new code reaches it.
+
+    `deploy/serve.sh` calls this on the way up, so everything here runs against
+    production on every deployment and every restart. The tests that matter are
+    therefore about what it does to data that is already there.
+    """
+
+    def test_it_brings_an_empty_database_up_with_a_usable_taxonomy(self):
+        """The point of loading the fixture at all.
+
+        Without it a fresh database serves a site with nothing on the filter bar
+        and a registration form that offers no headings and asks no questions.
+        """
+        Category.objects.all().delete()
+        call_command("deploy", stdout=StringIO())
+
+        self.assertEqual(set(Category.objects.values_list("slug", flat=True)), set(q.EVERY))
+        self.assertEqual(TagGroup.objects.count(), 4)
+        self.assertEqual(Tag.objects.count(), 30)
+        # Every question has answers offered to at least one heading, or it is a
+        # question the registration form will never show.
+        for group in TagGroup.objects.all():
+            with self.subTest(question=group.slug):
+                self.assertTrue(
+                    any(tag.categories.exists() for tag in group.tags.all()),
+                    f"{group.slug} has no answer offered under any heading",
+                )
+
+    def test_running_it_again_changes_nothing(self):
+        """It runs on every restart, not just every deployment."""
+        call_command("deploy", stdout=StringIO())
+        before = taxonomy_snapshot()
+        call_command("deploy", stdout=StringIO())
+        self.assertEqual(taxonomy_snapshot(), before)
+
+    def test_it_leaves_real_records_alone(self):
+        """The check that makes this safe to run against the live site.
+
+        `loaddata` inserts and updates the rows named in the fixture and deletes
+        nothing, but "deletes nothing" is a claim worth holding a test against,
+        because the command runs unattended against a database with other
+        people's work in it.
+        """
+        call_command("deploy", stdout=StringIO())
+        heading = Category.objects.get(slug=q.CO_OPS)
+        program = Program.objects.create(
+            name="Somebody's Co-op",
+            slug="somebodys-co-op",
+            short_description="Real work, entered by hand.",
+            status=Program.Status.PUBLISHED,
+            category=heading,
+        )
+        submission = Submission.objects.create(program_name="A registration")
+        user = User.objects.create_user("editor", "editor@example.org", "x")
+        # A tag she added herself, which the fixture has never heard of.
+        mine = Tag.objects.create(name="Wheelchair accessible", slug="wheelchair-accessible")
+        heading.tags.add(mine)
+
+        call_command("deploy", stdout=StringIO())
+
+        self.assertTrue(Program.objects.filter(pk=program.pk).exists())
+        self.assertTrue(Submission.objects.filter(pk=submission.pk).exists())
+        self.assertTrue(User.objects.filter(pk=user.pk).exists())
+        self.assertTrue(Tag.objects.filter(pk=mine.pk).exists())
+
+    def test_it_restores_a_heading_somebody_renamed(self):
+        """The trade this design makes, written down as a test rather than a surprise.
+
+        The fixture is the source of truth for the rows in it. An edit made in
+        the admin to a heading's name, ordering or tag list is undone by the next
+        deployment, so edits meant to last belong in the fixture.
+        """
+        call_command("deploy", stdout=StringIO())
+        Category.objects.filter(slug=q.CO_OPS).update(name="Renamed in the admin")
+        call_command("deploy", stdout=StringIO())
+        self.assertEqual(Category.objects.get(slug=q.CO_OPS).name, "Co-ops")
+
+    def test_skipping_fixtures_leaves_the_taxonomy_alone(self):
+        call_command("deploy", "--skip-fixtures", stdout=StringIO())
+        self.assertEqual(Category.objects.count(), 0)
+
+
+class TaxonomyFixtureTests(TestCase):
+    """The fixture is generated from `seed_taxonomy`, and this is what says so.
+
+    Two files describing one vocabulary is the drift this whole codebase keeps
+    trying to avoid. `seed_taxonomy` is where it is written and commented;
+    `taxonomy.json` is what the deployment loads. If somebody edits one and not
+    the other, the site starts deploying a taxonomy nobody wrote.
+    """
+
+    def test_the_fixture_and_the_seed_command_describe_the_same_taxonomy(self):
+        call_command("seed_taxonomy", stdout=StringIO())
+        seeded = taxonomy_snapshot()
+
+        Category.objects.all().delete()
+        Tag.objects.all().delete()
+        TagGroup.objects.all().delete()
+        call_command("loaddata", "taxonomy", verbosity=0)
+
+        self.assertEqual(
+            taxonomy_snapshot(),
+            seeded,
+            "The fixture and seed_taxonomy disagree. Regenerate the fixture — the "
+            "command's docstring in directory/management/commands/deploy.py has the "
+            "three lines that do it.",
+        )
+
+    def test_the_fixture_holds_exactly_the_headings_the_question_map_expects(self):
+        call_command("loaddata", "taxonomy", verbosity=0)
+        self.assertEqual(set(Category.objects.values_list("slug", flat=True)), set(q.EVERY))
+
+    def test_every_heading_has_a_distinct_colour(self):
+        """Chip colours come from the primary key, so the fixture decides them.
+
+        Thirteen headings and thirteen colours only line up while the keys run
+        1 to 13 without gaps, which is why the fixture is generated against an
+        empty database rather than dumped from a working one.
+        """
+        call_command("loaddata", "taxonomy", verbosity=0)
+        codes = [colour_code(c) for c in Category.objects.all()]
+        self.assertEqual(len(set(codes)), len(codes))

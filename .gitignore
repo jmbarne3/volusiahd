@@ -21,3 +21,8 @@ db.sqlite3-*
 .idea/
 .vscode/
 docs/
+
+# Database copies pulled from production for safekeeping before a destructive
+# change. They hold real submitter email addresses and password hashes, so they
+# belong on this machine and nowhere else.
+backups/
