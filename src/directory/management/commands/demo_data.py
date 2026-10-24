@@ -276,7 +276,9 @@ class Command(BaseCommand):
             "enrollment_notes": "Rolling after the start date, if there is room." if index else "",
             "step_up_direct_pay": index % 3 != 2,
             "step_up_pep": index % 3 == 0,
-            "step_up_fes_ua": index % 4 == 0,
+            # Every direct pay provider names at least one scholarship, as the
+            # form now insists.
+            "step_up_fes_ua": index % 3 == 1 or (index % 3 == 0 and index % 4 == 0),
             "delivery": DELIVERY_PATTERN[index % len(DELIVERY_PATTERN)],
             "travels_to_student_home": index % 2 == 1,
             "service_area": SERVICE_AREAS[index % len(SERVICE_AREAS)],

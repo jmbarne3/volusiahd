@@ -711,6 +711,20 @@ class SharedProgramFields(models.Model):
     class Meta:
         abstract = True
 
+    # Said where the error shows: on the public form, in the admin, anywhere a
+    # record is validated.
+    STEP_UP_WHICH = "Tick PEP, FES-UA or both, so families know which scholarship they can use."
+
+    def clean(self):
+        """A direct pay provider has to say which scholarships it takes.
+
+        "Step Up direct pay" on its own leaves a family not knowing whether
+        their scholarship covers it, which is the question they came with.
+        """
+        super().clean()
+        if self.step_up_direct_pay and not (self.step_up_pep or self.step_up_fes_ua):
+            raise ValidationError({"step_up_direct_pay": self.STEP_UP_WHICH})
+
     @classmethod
     def shared_field_names(cls):
         """Every field declared on this base, in declaration order.
@@ -738,9 +752,9 @@ class SharedProgramFields(models.Model):
     def step_up_display(self):
         """The sentence a program page shows, empty if they are not a provider.
 
-        A provider who is direct pay but has told us nothing about which
-        scholarships still gets the headline, because that alone answers the
-        question most families are asking.
+        Validation now makes a provider name PEP, FES-UA or both, so the bare
+        "Step Up direct pay" below is only for a record saved before that rule
+        or written around it. It still gets the headline rather than nothing.
         """
         if not self.step_up_direct_pay:
             return ""

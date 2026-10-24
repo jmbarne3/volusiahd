@@ -690,6 +690,15 @@ class RegistrationTests(TestCase):
         self.assertFalse(submission.step_up_direct_pay)
         self.assertFalse(submission.step_up_pep)
 
+    def test_direct_pay_without_a_scholarship_is_sent_back(self):
+        response = self.client.post(
+            reverse("directory:register"),
+            self._payload(step_up_direct_pay="on", step_up_pep="", step_up_fes_ua=""),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Submission.objects.count(), 0)
+        self.assertContains(response, "Tick PEP, FES-UA or both")
+
     def test_a_grade_level_that_is_not_one_is_refused(self):
         response = self.client.post(
             reverse("directory:register"), self._payload(grade_levels=["college"])
@@ -3248,3 +3257,32 @@ class InstructorWordingTests(TestCase):
 
         label = ProgramRegistrationForm().fields["instructor_info"].label
         self.assertEqual(label, "Teacher qualifications / leader bio")
+
+
+class StepUpScholarshipTests(TestCase):
+    """A direct pay provider has to name PEP, FES-UA or both (#6)."""
+
+    def _program(self, **step_up):
+        return Program(
+            name="Coastal Co-op",
+            slug="coastal",
+            short_description="A co-op.",
+            **step_up,
+        )
+
+    def test_direct_pay_alone_is_refused(self):
+        with self.assertRaises(ValidationError) as caught:
+            self._program(step_up_direct_pay=True).full_clean()
+        self.assertIn("step_up_direct_pay", caught.exception.message_dict)
+
+    def test_naming_either_scholarship_or_both_is_enough(self):
+        for step_up in [
+            {"step_up_pep": True},
+            {"step_up_fes_ua": True},
+            {"step_up_pep": True, "step_up_fes_ua": True},
+        ]:
+            with self.subTest(step_up=step_up):
+                self._program(step_up_direct_pay=True, **step_up).full_clean()
+
+    def test_not_being_a_provider_needs_no_scholarship(self):
+        self._program().full_clean()
