@@ -105,6 +105,28 @@ class PublicSiteTests(TestCase):
         response = self.client.get(reverse("directory:program_list"), {"q": "nothing-matches"})
         self.assertNotContains(response, "Sample Co-op")
 
+    def test_search_words_match_in_any_order_and_any_field(self):
+        """Families search with words, not titles. "co-op deland" matches the
+        name with one word and the address with the other."""
+        for query in ["co-op sample", "co-op deland", "  Sample,  DeLand "]:
+            with self.subTest(query=query):
+                response = self.client.get(reverse("directory:program_list"), {"q": query})
+                self.assertContains(response, "Sample Co-op")
+
+    def test_every_search_word_has_to_match(self):
+        response = self.client.get(reverse("directory:program_list"), {"q": "sample tampa"})
+        self.assertNotContains(response, "Sample Co-op")
+
+    def test_filler_words_do_not_sink_a_search(self):
+        response = self.client.get(
+            reverse("directory:program_list"), {"q": "the co-op classes in DeLand"}
+        )
+        self.assertContains(response, "Sample Co-op")
+
+    def test_a_search_of_only_filler_still_searches(self):
+        response = self.client.get(reverse("directory:program_list"), {"q": "the"})
+        self.assertNotContains(response, "Sample Co-op")
+
     def test_every_address_shows_on_the_program_page(self):
         self.program.locations.create(query="7 Rich Ave, DeLand 32724", sort_order=1)
         response = self.client.get(reverse("directory:program", kwargs={"slug": self.program.slug}))
@@ -219,6 +241,11 @@ class TagTests(TestCase):
         self.program.tags.add(self.other)
         self.program.tags.create(name="Legoland trips", slug="legoland-trips")
         response = self.client.get(reverse("directory:program_list"), {"q": "lego"})
+        self.assertContains(response, "Brick Builders", count=1)
+
+    def test_two_words_can_match_two_different_tags(self):
+        self.program.tags.add(self.other)
+        response = self.client.get(reverse("directory:program_list"), {"q": "lego dual"})
         self.assertContains(response, "Brick Builders", count=1)
 
     def test_tags_show_on_the_program_page_and_link_to_their_own_page(self):

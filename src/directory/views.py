@@ -1,4 +1,5 @@
 import hashlib
+import re
 
 from django.core.cache import cache
 from django.db.models import Q
@@ -35,6 +36,45 @@ def _published_programs():
     )
 
 
+# Words that would make a search fail without telling it anything. "Art class"
+# should find an art program that never calls itself a class.
+SEARCH_FILLER_WORDS = frozenset(
+    {"a", "an", "and", "the", "for", "of", "in", "on", "to", "with"}
+    | {"class", "classes", "program", "programs"}
+)
+
+
+def _search_words(query):
+    """The words in a search worth matching on.
+
+    Hyphens and apostrophes stay inside a word, so "pre-k" and "K-8" survive.
+    A search made only of filler ("the classes") keeps its words rather than
+    quietly becoming no search at all.
+    """
+    words = re.findall(r"[\w'-]+", query.lower())
+    return [w for w in words if w not in SEARCH_FILLER_WORDS] or words
+
+
+def _matches_word(word):
+    return (
+        Q(name__icontains=word)
+        | Q(host_name__icontains=word)
+        | Q(short_description__icontains=word)
+        | Q(description__icontains=word)
+        | Q(highlights__icontains=word)
+        | Q(class_names__icontains=word)
+        # Both spellings of a place: what the program typed and what it
+        # resolved to. Somebody searching "Ormond" should find a program
+        # that wrote "the church on Granada" and resolved to Ormond Beach.
+        | Q(locations__query__icontains=word)
+        | Q(locations__label__icontains=word)
+        | Q(locations__city__icontains=word)
+        # Tags are not listed anywhere, so the search box is the main way
+        # anyone reaches one. Typing "Lego" has to find the Lego programs.
+        | Q(tags__name__icontains=word)
+    )
+
+
 def _narrow(request, programs):
     """Apply the search box and every filter the query string carries.
 
@@ -53,24 +93,13 @@ def _narrow(request, programs):
         "tags": [slug.strip() for slug in request.GET.getlist("tag") if slug.strip()],
     }
 
-    if chosen["q"]:
-        programs = programs.filter(
-            Q(name__icontains=chosen["q"])
-            | Q(host_name__icontains=chosen["q"])
-            | Q(short_description__icontains=chosen["q"])
-            | Q(description__icontains=chosen["q"])
-            | Q(highlights__icontains=chosen["q"])
-            | Q(class_names__icontains=chosen["q"])
-            # Both spellings of a place: what the program typed and what it
-            # resolved to. Somebody searching "Ormond" should find a program
-            # that wrote "the church on Granada" and resolved to Ormond Beach.
-            | Q(locations__query__icontains=chosen["q"])
-            | Q(locations__label__icontains=chosen["q"])
-            | Q(locations__city__icontains=chosen["q"])
-            # Tags are not listed anywhere, so the search box is the main way
-            # anyone reaches one. Typing "Lego" has to find the Lego programs.
-            | Q(tags__name__icontains=chosen["q"])
-        )
+    # Every word has to turn up somewhere, but not together and not in order:
+    # "spanish beginners" finds "Beginners Spanish", and "lego deltona" finds a
+    # Lego club whose address is in Deltona. One filter per word, rather than
+    # one Q, so each word gets its own join and can match a different tag or
+    # location from the others.
+    for word in _search_words(chosen["q"]):
+        programs = programs.filter(_matches_word(word))
 
     programs = (
         programs.meeting_on(chosen["day"])
