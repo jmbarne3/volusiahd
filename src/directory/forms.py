@@ -291,41 +291,71 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "submitter_email": "Your email",
             "submitter_role": "Your role at the program",
         }
+        # Every free-text field says what goes in it and shows an example, so a
+        # provider knows what we mean before they start typing (#8). Checkboxes,
+        # dropdowns and dates explain themselves and only get a hint where there
+        # is something to say. The examples hang together — one tutor, Patty
+        # Ruiz, running "Beginners Spanish" under "Learning with Patty" — so the
+        # form reads as one listing being filled in.
         help_texts = {
-            "short_description": "This is what people read in the directory listing "
-            "before they click to your profile page. One sentence.",
-            "description": "Tell families what you do, who it is for, and how to join. "
-            "Leave a blank line between paragraphs.",
-            "host_name": "Only if your listing is a class or a team run under a larger "
-            "group. Leave it blank if they are the same thing.",
-            "class_names": "Separated by commas — e.g. 'Algebra I, Geometry, Chemistry'.",
+            "program_name": "The name families will see at the top of your listing — "
+            "e.g. 'Beginners Spanish' or 'Ormond Beach Homeschool Co-op'.",
+            "host_name": "Only if your listing is one class or team run by a larger "
+            "group or business — e.g. 'Learning with Patty' for her Beginners Spanish "
+            "class. Leave it blank if they are the same thing.",
+            "short_description": "One sentence that families read in the directory "
+            "before they click through — e.g. 'A weekly conversation class for "
+            "beginners, ages 8 to 12.'",
+            "description": "What you do, who it is for, and how to join — e.g. what a "
+            "typical session looks like, how big the groups are, and the first step to "
+            "sign up. Leave a blank line between paragraphs.",
+            "class_names": "Each class you offer, separated by commas — e.g. "
+            "'Algebra I, Geometry, Chemistry'.",
             "faith_basis": "Families ask, so we ask. Leave it blank if you would rather "
             "not answer — that is not the same as saying no, and we will publish neither.",
-            "instructor_info": "Families ask this before they ask almost anything else. "
-            "Names are optional; qualifications and experience are what they are after.",
+            "instructor_info": "Who teaches or leads, and what qualifies them — e.g. "
+            "'Taught by Patty Ruiz, a former middle school Spanish teacher with 12 years "
+            "in the classroom.' Names are optional; experience and qualifications are "
+            "what families look for.",
             "highlights": "What a family gets with you that they would not get anywhere "
-            "else. Two or three sentences is plenty.",
-            "facebook": "The whole address, starting with https://.",
-            "email": "Published on your page. Leave blank if you would rather not.",
-            "service_area": "e.g. 'west Volusia only' or 'up to 30 miles'.",
+            "else — e.g. 'Groups of six or fewer, and every student performs in a spring "
+            "showcase.' Two or three sentences is plenty.",
+            "website": "Your program's own website, starting with https:// — e.g. "
+            "'https://learningwithpatty.com'.",
+            "facebook": "The whole address of your page or group, starting with https:// "
+            "— e.g. 'https://facebook.com/groups/ormondhomeschool'.",
+            "email": "Where families can write to you. Published on your page — e.g. "
+            "'hello@learningwithpatty.com'. Leave it blank if you would rather not.",
+            "phone": "Published on your page — e.g. '386-555-0142'. Leave it blank if "
+            "you would rather not.",
+            "delivery": "Choose 'In person or virtual' if families can join either way.",
+            "travels_to_student_home": "Tick if you go to the family's home, rather than "
+            "the family coming to you.",
+            "service_area": "How far you will travel to families — e.g. 'west Volusia "
+            "only' or 'up to 30 miles from DeLand'.",
             "grade_levels": "Tick every level you take. Families filter by this.",
             "meeting_days": "Tick every day you normally meet. Families filter by this.",
             "meeting_time_start": "Leave blank if it varies.",
             "season_start": "The date your term or season starts. Leave blank if you run "
             "year round.",
-            "enrollment_notes": "e.g. 'rolling admission' or 'waiting list only'.",
+            "meeting_schedule": "Anything the boxes above cannot say — e.g. 'alternate "
+            "Tuesdays' or 'times vary by class'.",
+            "enrollment_notes": "How families get a place — e.g. 'rolling admission' or "
+            "'waiting list only'.",
             "cost_basis": "The headline answer. The detail goes in the next box.",
-            "cost_notes": "e.g. '$45/semester per family, plus a $20 materials fee'.",
+            "cost_notes": "What families pay, and when — e.g. '$45 per semester per "
+            "family, plus a $20 materials fee'.",
             "step_up_direct_pay": "Tick this if families can pay you directly through "
             "Step Up For Students' EMA marketplace, rather than paying you and claiming "
             "it back.",
             "step_up_pep": "Personalized Education Program.",
             "step_up_fes_ua": "Family Empowerment Scholarship for Students with Unique Abilities.",
-            "meeting_schedule": "For what the boxes above cannot say — e.g. 'alternate "
-            "Tuesdays' or 'times vary by class'.",
             "logo": "Optional. PNG or JPEG, up to 2 MB.",
+            "submitter_name": "Never published — e.g. 'Patty Ruiz'.",
             "submitter_email": "So we can ask you a question if something is unclear. "
             "It is never published.",
+            "submitter_role": "Never published — e.g. 'Owner', 'Co-op coordinator' or "
+            "'Parent volunteer'.",
         }
         widgets = {
             "short_description": forms.TextInput,
@@ -362,9 +392,10 @@ class ProgramRegistrationForm(BaseSubmissionForm):
                 self.fields[name].required = True
         self.fields["locations"].label = "Where you meet"
         self.fields["locations"].help_text = (
-            "Start typing an address and pick the match. If you meet in more than one "
-            "place, add each of them. No fixed address? A city is a perfectly good "
-            "answer — type it and press +."
+            "Start typing and pick the match — e.g. 'DeLand Regional Library' or "
+            "'130 E Howry Ave, DeLand'. If you meet in more than one place, add each of "
+            "them. No fixed address? A city is a perfectly good answer — type it and "
+            "press +."
         )
         for name, label in self.BLANK_LABELS.items():
             field = self.fields[name]

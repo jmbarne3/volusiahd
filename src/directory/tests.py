@@ -18,6 +18,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 
+from django import forms as forms_module
 from django.apps import apps as django_apps
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -3372,3 +3373,45 @@ class RetireParentInvolvementMigrationTests(TestCase):
             Tag.objects.create(name=slug, slug=slug)
         migration.retire(django_apps, None)
         self.assertEqual(sorted(Tag.objects.values_list("slug", flat=True)), ["drop-off", "lego"])
+
+
+class RegistrationExampleTextTests(TestCase):
+    """Every free-text field on the registration form shows an example (#8)."""
+
+    def test_every_text_field_gives_an_example(self):
+        from .forms import ProgramRegistrationForm
+
+        form = ProgramRegistrationForm()
+        text_widgets = (
+            forms_module.TextInput,
+            forms_module.Textarea,
+            forms_module.URLInput,
+            forms_module.EmailInput,
+        )
+        # Dates and times are pickers, not typing. The contact email says what it
+        # is for instead; an example address would add nothing.
+        exempt = (forms_module.DateInput, forms_module.TimeInput)
+        for name, field in form.fields.items():
+            if name == "submitter_email" or isinstance(field.widget, exempt):
+                continue
+            if isinstance(field.widget, text_widgets) and not field.widget.is_hidden:
+                with self.subTest(field=name):
+                    self.assertIn("e.g.", str(field.help_text))
+
+    def test_the_product_owners_examples_are_used(self):
+        from .forms import ProgramRegistrationForm
+
+        fields = ProgramRegistrationForm().fields
+        self.assertIn("Beginners Spanish", fields["program_name"].help_text)
+        self.assertIn("Learning with Patty", fields["host_name"].help_text)
+
+    def test_no_hint_talks_about_the_provider_in_the_third_person(self):
+        """Model help text is written for us in the admin ("Tick if they come to
+        the family"); on the public form it has to speak to the provider."""
+        from .forms import ProgramRegistrationForm
+
+        for name in ["delivery", "travels_to_student_home", "submitter_role"]:
+            with self.subTest(field=name):
+                hint = str(ProgramRegistrationForm().fields[name].help_text)
+                self.assertNotIn("they", hint.split())
+                self.assertFalse(hint.startswith("Their"))
