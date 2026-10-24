@@ -3228,3 +3228,23 @@ class VirtualOptionsFilterTests(TestCase):
     def test_the_wording_says_virtual_everywhere(self):
         self.assertEqual(Program.Delivery.ONLINE.label, "Virtual")
         self.assertEqual(Program.Delivery.HYBRID.label, "In person or virtual")
+
+
+class InstructorWordingTests(TestCase):
+    def test_the_program_page_heading_covers_leaders_as_well_as_teachers(self):
+        Program.objects.create(
+            name="Tide Pool Club",
+            slug="tide-pool",
+            short_description="A club.",
+            status=Program.Status.PUBLISHED,
+            instructor_info="Run by a marine biologist.",
+        )
+        response = self.client.get(reverse("directory:program", kwargs={"slug": "tide-pool"}))
+        self.assertContains(response, "<h2>Teacher qualifications / leader bio</h2>", html=True)
+        self.assertNotContains(response, "Who teaches")
+
+    def test_the_form_label_matches_the_page(self):
+        from .forms import ProgramRegistrationForm
+
+        label = ProgramRegistrationForm().fields["instructor_info"].label
+        self.assertEqual(label, "Teacher qualifications / leader bio")

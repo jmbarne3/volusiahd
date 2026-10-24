@@ -251,7 +251,7 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "description": "Full description",
             "class_names": "Classes offered",
             "faith_basis": "Faith affiliation",
-            "instructor_info": "Who teaches, and what qualifies them",
+            "instructor_info": "Teacher qualifications / leader bio",
             "highlights": "What makes your program special",
             "website": "Website",
             "facebook": "Facebook page URL",

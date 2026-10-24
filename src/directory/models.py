@@ -564,9 +564,9 @@ class SharedProgramFields(models.Model):
         "e.g. 'Algebra I, Geometry, Chemistry'.",
     )
     instructor_info = models.TextField(
-        "teachers and qualifications",
+        "teacher qualifications / leader bio",
         blank=True,
-        help_text="Who teaches, and what qualifies them. Families ask this before they "
+        help_text="Who teaches or leads, and what qualifies them. Families ask this before they "
         "ask almost anything else.",
     )
     highlights = models.TextField(
