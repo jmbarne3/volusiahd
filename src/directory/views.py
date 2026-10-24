@@ -8,9 +8,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET
 
 from . import geocoding
-from .addresses import MIN_QUERY_CHARS
+from .addresses import DEBOUNCE_MS, MIN_QUERY_CHARS, parse_coordinate
 from .forms import ProgramReferralForm, ProgramRegistrationForm
-from .models import WEEKDAYS, Category, Page, Program, Tag
+from .models import WEEKDAY_NAMES, WEEKDAYS, Category, Page, Program, Tag
 
 # How long an answer to the same question is worth keeping. Addresses do not
 # move, and the second person to type "Ormond Beach" should cost nothing. An
@@ -75,6 +75,68 @@ def _matches_word(word):
     )
 
 
+# What the browser's own location is called, in the box and in the summary. The
+# script writes it into the box, so the template hands it the same words.
+YOUR_LOCATION = "Your location"
+
+DISTANCE_CHOICES = [5, 10, 25, 50]
+DEFAULT_DISTANCE = 25
+
+
+def _chosen_place(request):
+    """Where a family asked to search near, as the filter reads it.
+
+    Coordinates come first and need nobody's help: "Use my location" and a pick
+    from the suggestion list both send them, so neither costs a geocoder call.
+    Only a place typed and submitted without picking is looked up here, through
+    the same cache the suggestion list uses.
+
+    Coordinates are rounded to two places — about a kilometre — before anything
+    else sees them. A filtered list is a link people share, and nobody's home
+    address should travel inside one.
+    """
+    near = request.GET.get("near", "").strip()[:120]
+    try:
+        within = int(request.GET.get("within", DEFAULT_DISTANCE))
+    except ValueError:
+        within = DEFAULT_DISTANCE
+    if within not in DISTANCE_CHOICES:
+        within = DEFAULT_DISTANCE
+
+    place = {"near": near, "within": within, "point": None, "place_problem": ""}
+    if not near:
+        return place
+
+    latitude = parse_coordinate(request.GET.get("lat"), 90)
+    longitude = parse_coordinate(request.GET.get("lng"), 180)
+    if latitude is not None and longitude is not None:
+        place["point"] = (round(latitude, 2), round(longitude, 2))
+        return place
+
+    if near == YOUR_LOCATION:
+        place["place_problem"] = (
+            "We could not tell where you are. Allow location access, or type a town."
+        )
+        return place
+
+    try:
+        results, _ = _places_for(near)
+    except geocoding.GeocoderUnavailable:
+        place["place_problem"] = (
+            f"We could not look up “{near}” just now, so this list is not "
+            "filtered by distance. Try again in a minute."
+        )
+        return place
+    if not results:
+        place["place_problem"] = (
+            f"We could not find “{near}” on the map. Try a town name or a street address."
+        )
+        return place
+
+    place["point"] = (round(results[0]["latitude"], 2), round(results[0]["longitude"], 2))
+    return place
+
+
 def _narrow(request, programs):
     """Apply the search box and every filter the query string carries.
 
@@ -85,12 +147,15 @@ def _narrow(request, programs):
     """
     chosen = {
         "q": request.GET.get("q", "").strip(),
-        "day": request.GET.get("day", "").strip(),
+        # In week order, whatever order they were ticked in, and only real days,
+        # so the chips and the checkboxes read back exactly what was applied.
+        "days": [code for code, _ in WEEKDAYS if code in request.GET.getlist("day")],
         "faith": request.GET.get("faith", "").strip(),
         "age": request.GET.get("age", "").strip(),
         "online": request.GET.get("online") == "1",
         "directpay": request.GET.get("directpay") == "1",
         "tags": [slug.strip() for slug in request.GET.getlist("tag") if slug.strip()],
+        **_chosen_place(request),
     }
 
     # Every word has to turn up somewhere, but not together and not in order:
@@ -102,7 +167,7 @@ def _narrow(request, programs):
         programs = programs.filter(_matches_word(word))
 
     programs = (
-        programs.meeting_on(chosen["day"])
+        programs.meeting_on(chosen["days"])
         .with_faith_basis(chosen["faith"])
         .serving_age(chosen["age"])
         .tagged(chosen["tags"])
@@ -114,19 +179,114 @@ def _narrow(request, programs):
     return programs, chosen
 
 
+def _clean_params(request, chosen):
+    """The query string as this page should repeat it in its own links.
+
+    Coordinates go back out rounded, or not at all, never as they arrived: a
+    link built by echoing the request would carry somebody's exact location
+    straight past the rounding in `_chosen_place`.
+    """
+    params = request.GET.copy()
+    for key in ["lat", "lng"]:
+        params.pop(key, None)
+    if chosen["point"]:
+        params["lat"], params["lng"] = (str(value) for value in chosen["point"])
+    return params
+
+
+def _without(request, chosen, *keys, drop=None):
+    """This page's address with some filters taken off, for a chip's remove link.
+
+    `keys` removes a parameter outright. `drop` is a (key, value) pair for the
+    ones that repeat — a day, a tag — and removes that one value, leaving the
+    rest of the parameter alone.
+    """
+    params = _clean_params(request, chosen)
+    for key in keys:
+        params.pop(key, None)
+    if drop is not None:
+        key, value = drop
+        params.setlist(key, [kept for kept in params.getlist(key) if kept != value])
+    query = params.urlencode()
+    return f"{request.path}?{query}" if query else request.path
+
+
+def _active_chips(request, chosen):
+    """Every filter that is narrowing the list, each with a link that removes it.
+
+    Built from what `_narrow` actually applied rather than from the raw query
+    string, so a chip never claims a filter that was ignored — an age of "abc"
+    filters nothing and gets no chip.
+    """
+    chips = []
+    if chosen["q"]:
+        chips.append((f"“{chosen['q']}”", _without(request, chosen, "q")))
+    if chosen["near"]:
+        where = "you" if chosen["near"] == YOUR_LOCATION else chosen["near"]
+        chips.append(
+            (
+                f"Within {chosen['within']} mi of {where}",
+                _without(request, chosen, "near", "lat", "lng", "within"),
+            )
+        )
+    for day in chosen["days"]:
+        chips.append((f"Meets {WEEKDAY_NAMES[day]}", _without(request, chosen, drop=("day", day))))
+    if chosen["age"].isdigit():
+        chips.append((f"Age {chosen['age']}", _without(request, chosen, "age")))
+    if chosen["faith"] in Program.Faith.values:
+        chips.append((Program.Faith(chosen["faith"]).label, _without(request, chosen, "faith")))
+    if chosen["online"]:
+        chips.append(("Online available", _without(request, chosen, "online")))
+    if chosen["directpay"]:
+        chips.append(("Step Up direct pay", _without(request, chosen, "directpay")))
+    names = dict(Tag.objects.filter(slug__in=chosen["tags"]).values_list("slug", "name"))
+    for slug in dict.fromkeys(chosen["tags"]):
+        chips.append((names.get(slug, slug), _without(request, chosen, drop=("tag", slug))))
+    return [{"label": label, "remove_url": url} for label, url in chips]
+
+
 def _listing_context(request, programs, **extra):
     """Shared context for every page that renders the program listing."""
     programs, chosen = _narrow(request, programs)
+
+    # With a place chosen the listing splits in two. Programs in range, nearest
+    # first; then the ones a distance cannot be measured to, which a family
+    # looking for a tutor who comes to the house still needs to see.
+    unplaced = None
+    if point := chosen["point"]:
+        unplaced = programs.without_a_point().distinct()
+        programs = programs.near(*point, chosen["within"]).order_by("distance", "name")
+
+    # Switching category keeps every other filter. The category itself is the
+    # link's own path, so it is the one parameter left behind.
+    keep = _clean_params(request, chosen)
+    keep.pop("category", None)
+
+    filters_active = any(
+        chosen[key] for key in ["days", "faith", "age", "online", "directpay", "tags", "near"]
+    )
+    if point:
+        empty_message = "Nothing in range. Try a wider distance."
+    elif filters_active or chosen["q"]:
+        empty_message = "Nothing matches. Try removing a filter."
+    else:
+        empty_message = "Nothing here yet."
+
     return {
         "programs": programs.distinct(),
+        "unplaced": unplaced,
+        "active_chips": _active_chips(request, chosen),
+        "keep_query": keep.urlencode(),
+        "empty_message": empty_message,
         "categories": Category.objects.all(),
         "query": chosen["q"],
         "filters": chosen,
-        "filters_active": any(
-            chosen[key] for key in ["day", "faith", "age", "online", "directpay", "tags"]
-        ),
+        "filters_active": filters_active,
         "weekdays": WEEKDAYS,
-        "faith_choices": Program.Faith.choices,
+        "distance_choices": DISTANCE_CHOICES,
+        "your_location": YOUR_LOCATION,
+        "address_min_chars": MIN_QUERY_CHARS,
+        "address_debounce": DEBOUNCE_MS,
         **extra,
     }
 
@@ -252,17 +412,28 @@ def address_search(request):
     if len(query) < MIN_QUERY_CHARS:
         return JsonResponse({"results": []})
 
+    try:
+        results, cached = _places_for(query)
+    except geocoding.GeocoderUnavailable:
+        return JsonResponse({"results": [], "unavailable": True})
+    return JsonResponse({"results": results, **({"cached": True} if cached else {})})
+
+
+def _places_for(query):
+    """Suggestions for `query` as plain dicts, and whether they came from the cache.
+
+    Shared by the address picker and the location filter, so a place somebody
+    was offered while typing costs nothing when the filter looks it up again.
+    Raises `GeocoderUnavailable`, which is never cached: a service that is down
+    now may well be up for the next person.
+    """
     # Hashed because a cache key cannot hold arbitrary text, and case-folded
     # because "DeLand" and "deland" are the same question.
     key = "address:" + hashlib.sha256(query.casefold().encode()).hexdigest()[:32]
     if (cached := cache.get(key)) is not None:
-        return JsonResponse({"results": cached, "cached": True})
+        return cached, True
 
-    try:
-        places = geocoding.search(query, limit=ADDRESS_RESULT_LIMIT)
-    except geocoding.GeocoderUnavailable:
-        return JsonResponse({"results": [], "unavailable": True})
-
+    places = geocoding.search(query, limit=ADDRESS_RESULT_LIMIT)
     results = [
         {
             "label": place.label,
@@ -276,4 +447,4 @@ def address_search(request):
         for place in places
     ]
     cache.set(key, results, ADDRESS_CACHE_SECONDS)
-    return JsonResponse({"results": results})
+    return results, False

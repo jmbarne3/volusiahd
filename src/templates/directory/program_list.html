@@ -1,90 +1,194 @@
 {% extends "base.html" %}
-{% load directory_extras %}
+{% load static directory_extras %}
 
 {% block title %}{% firstof active_category.name active_tag.name "Programs" %} — {{ site_name }}{% endblock %}
 {% block og_title %}{% firstof active_category.name active_tag.name "Programs" %} — {{ site_name }}{% endblock %}
+{% block main_class %}listing-page{% endblock %}
 
 {% block content %}
-<h1>{% if active_category %}{{ active_category.name }}{% elif active_tag %}Tagged “{{ active_tag.name }}”{% elif query %}Results for “{{ query }}”{% else %}All programs{% endif %}</h1>
-{% if active_category.description %}<p class="lede">{{ active_category.description }}</p>{% endif %}
-{% if active_tag.description %}<p class="lede">{{ active_tag.description }}</p>{% endif %}
+<div class="listing">
 
 {% comment %}
-One form, posting back to whatever page it is on, so the same filters work on the
-all-programs page, a category page and a tag page. Everything it can narrow by is
-a plain GET parameter, which means a filtered list is a link somebody can send to
-a friend.
+The filters, down the left edge. One form, posting back to whatever page it is
+on, so the same filters work on the all-programs page, a category page and a tag
+page. Everything it narrows by is a plain GET parameter, which means a filtered
+list is a link somebody can send to a friend.
 
-`category` rides along as a hidden input only where it came from the query string.
-On a category page the heading is in the path already, and a hidden copy of it
-would put it in twice.
+With the script running, every control applies the moment it changes and the
+Apply button hides itself — there is one way to search, not two. Without it the
+button is the way, and nothing else is lost.
+
+On a narrow screen the whole panel folds into a disclosure above the results,
+so a phone shows programs first and filters on request.
 {% endcomment %}
-<form class="search-form" action="" method="get">
-  {% comment %}
-  `.search` wraps the box and its button and nothing else. It is a pill with a
-  pane behind it, it hides its own label on purpose, and it strips the border off
-  any input inside it — all of which is right for one row and wrong for anything
-  put underneath. The filters are a sibling of it rather than a child.
-  {% endcomment %}
-  <div class="search">
-    <label for="q">Search programs</label>
-    <input type="search" id="q" name="q" value="{{ query }}">
-    <button type="submit">Search</button>
+<aside class="listing-sidebar" aria-label="Search and filters">
+  <details class="filter-drawer" open data-filter-drawer>
+    <summary>
+      Filters{% if active_chips %} <span class="filter-count">{{ active_chips|length }} applied</span>{% endif %}
+    </summary>
+
+    <form class="refine" action="" method="get" data-auto-apply>
+      {% comment %}
+      `.search` wraps the box and its button and nothing else. It is a pill that
+      hides its own label and strips the border off any input inside it — right
+      for one row, wrong for anything put underneath.
+      {% endcomment %}
+      <section class="filter-group filter-search">
+        <h2 class="filter-heading">Search</h2>
+        <div class="search">
+          <label for="q">Search programs</label>
+          <input type="search" id="q" name="q" value="{{ query }}" placeholder="Co-op, algebra, soccer…">
+          <button type="submit" aria-label="Search">Go</button>
+        </div>
+      </section>
+
+      {% comment %}
+      Near a place. The box is the registration form's address search, so a pick
+      carries coordinates and costs no lookup; "Use my location" asks the browser
+      and costs none either. The coordinates are not rendered as inputs: the
+      script adds them from data-lat and data-lng and removes them the moment the
+      box is edited, so a place typed over an old one never searches near the old
+      one. Without the script, the server looks up whatever was typed.
+      {% endcomment %}
+      <section class="filter-group">
+        <h2 class="filter-heading"><label for="f-near">Near</label></h2>
+        <div class="refine-near" data-near-picker data-submit-on-pick
+             data-endpoint="{% url 'directory:address_search' %}"
+             data-min-chars="{{ address_min_chars }}" data-debounce="{{ address_debounce }}"
+             data-your-location="{{ your_location }}"
+             {% if filters.point %}data-lat="{{ filters.point.0 }}" data-lng="{{ filters.point.1 }}"{% endif %}>
+          <div class="address-picker">
+            <input type="text" id="f-near" name="near" value="{{ filters.near }}"
+                   class="address-picker__input" placeholder="Town or address" autocomplete="off"
+                   role="combobox" aria-expanded="false" aria-autocomplete="list"
+                   aria-controls="f-near_results" data-near-input>
+            <ul id="f-near_results" class="address-picker__results" role="listbox" hidden data-address-results></ul>
+          </div>
+          <button type="button" class="button-quiet" data-near-locate hidden>Use my location</button>
+          <label class="inline-label" for="f-within">Within</label>
+          <select id="f-within" name="within">
+            {% for miles in distance_choices %}<option value="{{ miles }}"{% if filters.within == miles %} selected{% endif %}>{{ miles }} miles</option>{% endfor %}
+          </select>
+        </div>
+        <p class="refine-status" data-near-status aria-live="polite">{{ filters.place_problem }}</p>
+      </section>
+
+      {% if category_in_query %}<input type="hidden" name="category" value="{{ active_category.slug }}">{% endif %}
+
+      {% comment %}
+      Links rather than inputs: a category page has its own address. The other
+      filters ride along in the query string, so switching category keeps them.
+
+      Five headings show and the rest fold away behind a toggle under the list.
+      The folding is the script's: without it every heading shows and the toggle
+      stays hidden. It starts unfolded when the current heading is one of the
+      folded ones — a selected category hidden behind a toggle would look like no
+      category at all.
+      {% endcomment %}
+      <section class="filter-group" data-fold{% if active_category in categories|slice:"5:" %} data-fold-open{% endif %}>
+        <h2 class="filter-heading">Category</h2>
+        <ul class="filter-links" id="category-links">
+          <li><a class="c-all{% if not active_category and not active_tag %} active{% endif %}" href="{% url 'directory:program_list' %}{% if keep_query %}?{{ keep_query }}{% endif %}">All programs</a></li>
+          {% for category in categories %}
+            <li{% if forloop.counter > 5 %} class="fold-extra"{% endif %}><a class="c{{ category|colour_code }}{% if category == active_category %} active{% endif %}"{% if category == active_category %} aria-current="page"{% endif %} href="{{ category.get_absolute_url }}{% if keep_query %}?{{ keep_query }}{% endif %}">{{ category.name }}</a></li>
+          {% endfor %}
+        </ul>
+        {% if categories|length > 5 %}
+          <button type="button" class="fold-toggle" data-fold-toggle aria-controls="category-links" aria-expanded="true"
+                  data-more="Show {{ categories|length|add:"-5" }} more" data-fewer="Show fewer" hidden>Show fewer</button>
+        {% endif %}
+      </section>
+
+      <fieldset class="filter-group">
+        <legend class="filter-heading">Meets on</legend>
+        <ul class="filter-options">
+          {% comment %}Any of the ticked days, not all of them. None ticked is any day.{% endcomment %}
+          {% for code, name in weekdays %}
+            <li><label><input type="checkbox" name="day" value="{{ code }}"{% if code in filters.days %} checked{% endif %}> {{ name }}</label></li>
+          {% endfor %}
+        </ul>
+      </fieldset>
+
+      <section class="filter-group">
+        <h2 class="filter-heading"><label for="f-age">Child's age</label></h2>
+        <input type="number" id="f-age" name="age" min="0" max="25" value="{{ filters.age }}" placeholder="Any age" inputmode="numeric">
+      </section>
+
+      <fieldset class="filter-group">
+        <legend class="filter-heading">Options</legend>
+        <ul class="filter-options">
+          <li><label><input type="checkbox" name="online" value="1"{% if filters.online %} checked{% endif %}> Online available</label></li>
+          <li><label><input type="checkbox" name="directpay" value="1"{% if filters.directpay %} checked{% endif %}> Step Up direct pay</label></li>
+        </ul>
+      </fieldset>
+
+      {% comment %}
+      Tag filters arrive as repeated `tag=` parameters from a program page's
+      chips, so they are carried across rather than offered as a control — there
+      are far too many tags to list. Each one is removable from the chips above
+      the results, which is the part that matters.
+      {% endcomment %}
+      {% for slug in filters.tags %}<input type="hidden" name="tag" value="{{ slug }}">{% endfor %}
+
+      <div class="refine-actions" data-apply-actions>
+        <button type="submit">Apply filters</button>
+      </div>
+    </form>
+  </details>
+</aside>
+
+<section class="listing-results" aria-labelledby="listing-title">
+  <h1 id="listing-title">{% if active_category %}{{ active_category.name }}{% elif active_tag %}Tagged “{{ active_tag.name }}”{% elif query %}Results for “{{ query }}”{% else %}All programs{% endif %}</h1>
+  {% if active_category.description %}<p class="lede">{{ active_category.description }}</p>{% endif %}
+  {% if active_tag.description %}<p class="lede">{{ active_tag.description }}</p>{% endif %}
+
+  {% with count=programs|length %}
+  <div class="results-bar">
+    <p class="result-count" role="status">
+      <strong>{{ count }}</strong> program{{ count|pluralize }}{% if filters.point %}
+      within {{ filters.within }} miles of {% if filters.near == your_location %}you{% else %}{{ filters.near }}{% endif %}, nearest first{% endif %}{% if unplaced %},
+      plus {{ unplaced|length }} with no fixed location{% endif %}
+    </p>
+
+    {% if active_chips %}
+      <ul class="active-filters" aria-label="Filters applied">
+        {% for chip in active_chips %}
+          <li><a href="{{ chip.remove_url }}" aria-label="Remove filter: {{ chip.label }}">{{ chip.label }} <span aria-hidden="true">×</span></a></li>
+        {% endfor %}
+        <li><a class="clear" href="{% if active_category %}{{ active_category.get_absolute_url }}{% elif active_tag %}{{ active_tag.get_absolute_url }}{% else %}{% url 'directory:program_list' %}{% endif %}">Clear all</a></li>
+      </ul>
+    {% endif %}
   </div>
-  {% if category_in_query %}<input type="hidden" name="category" value="{{ active_category.slug }}">{% endif %}
 
-  <div class="refine">
-    <span class="refine-label">Narrow it down</span>
-    <div class="refine-row">
-      <label for="f-day">Meets on</label>
-      <select id="f-day" name="day">
-        <option value="">Any day</option>
-        {% for code, name in weekdays %}<option value="{{ code }}"{% if filters.day == code %} selected{% endif %}>{{ name }}</option>{% endfor %}
-      </select>
-
-      <label for="f-age">Age</label>
-      <input type="number" id="f-age" name="age" min="0" max="25" value="{{ filters.age }}" placeholder="any">
-
-      <label for="f-faith">Affiliation</label>
-      <select id="f-faith" name="faith">
-        <option value="">Either</option>
-        {% for value, name in faith_choices %}<option value="{{ value }}"{% if filters.faith == value %} selected{% endif %}>{{ name }}</option>{% endfor %}
-      </select>
-    </div>
-
-    <div class="refine-checks">
-      <label><input type="checkbox" name="online" value="1"{% if filters.online %} checked{% endif %}> Online available</label>
-      <label><input type="checkbox" name="directpay" value="1"{% if filters.directpay %} checked{% endif %}> Step Up direct pay</label>
-    </div>
+  {% if filters.point %}
+    {% include "directory/_program_cards.html" %}
 
     {% comment %}
-    Tag filters arrive as repeated `tag=` parameters from a program page's chips,
-    so they are carried across rather than offered as a control — there are far
-    too many tags to list. Each one is removable, which is the part that matters.
+    Never dropped quietly. A program with no point on the map is not far away;
+    it is somewhere a distance cannot be measured to, and for a tutor who comes to
+    the house that is the whole appeal.
     {% endcomment %}
-    {% for slug in filters.tags %}<input type="hidden" name="tag" value="{{ slug }}">{% endfor %}
+    {% if unplaced %}
+      <section class="unplaced">
+        <h2>No fixed location</h2>
+        <p class="lede">Online, at members' homes, coming to you, or an address we have not placed on the map yet.</p>
+        {% include "directory/_program_cards.html" with programs=unplaced empty_message="" %}
+      </section>
+    {% endif %}
+  {% else %}
+    {% include "directory/_program_cards.html" %}
+  {% endif %}
+  {% endwith %}
+</section>
 
-    <div class="refine-actions">
-      {% comment %}
-      Quieter than the Search button, because it is the same submit: both send the
-      whole form. Two buttons of equal weight would read as two different actions.
-      {% endcomment %}
-      <button type="submit" class="button-quiet">Apply filters</button>
-      {% if filters_active or query %}<a class="clear" href="{% if active_category %}{{ active_category.get_absolute_url }}{% elif active_tag %}{{ active_tag.get_absolute_url }}{% else %}{% url 'directory:program_list' %}{% endif %}">Clear</a>{% endif %}
-    </div>
-  </div>
-</form>
+</div>
+{% endblock %}
 
-<nav class="filters">
-  {% comment %}
-  A tag page shows the category bar so there is a way back out of it, but "All"
-  must not read as the current page — on a tag page, none of these is.
-  {% endcomment %}
-  <a class="c-all{% if not active_category and not active_tag %} active{% endif %}" href="{% url 'directory:program_list' %}">All</a>
-  {% for category in categories %}
-    <a class="c{{ category|colour_code }}{% if category == active_category %} active{% endif %}" href="{{ category.get_absolute_url }}">{{ category.name }}</a>
-  {% endfor %}
-</nav>
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/address-picker.css' %}">
+{% endblock %}
 
-{% include "directory/_program_cards.html" %}
+{% block scripts %}
+<script src="{% static 'js/address-picker.js' %}" defer></script>
+<script src="{% static 'js/listing-filters.js' %}" defer></script>
 {% endblock %}

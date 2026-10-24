@@ -776,40 +776,211 @@ a.tag:hover { color: var(--ink-strong); }
    this stylesheet already depends on browsers having through `light-dark()`. */
 /* --- Narrowing a listing -------------------------------------------------- */
 
-.search-form { max-width: 34rem; margin: 0 0 var(--s-6); }
-.search-form .search { margin-bottom: 0; max-width: none; }
-
-.refine { margin-top: var(--s-4); }
-.refine-label {
-  display: block;
-  font-size: .9rem;
-  font-weight: 580;
-  color: var(--muted);
-  margin-bottom: var(--s-3);
+/* The listing page drops `.wrap`: the filters sit against the left edge of the
+   window and the results take everything to their right, so a wide screen
+   shows more programs rather than more margin. */
+main.listing-page { padding-block: 0 var(--s-8); }
+.listing {
+  display: grid;
+  grid-template-columns: 17.5rem minmax(0, 1fr);
+  align-items: start;
+  min-height: 70vh;
 }
-.refine-row, .refine-checks {
+
+.listing-sidebar {
+  --sidebar-pad: var(--s-5);
+  --sidebar-pad-top: var(--s-5);
+  align-self: stretch;
+  padding: var(--sidebar-pad-top) var(--sidebar-pad) var(--s-6);
+  background: var(--pane);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border-right: 1px solid var(--hairline);
+  box-shadow: inset -1px 0 0 var(--edge);
+}
+
+/* On a wide screen the drawer is always open (listing-filters.js sees to it),
+   so its toggle is noise. */
+.filter-drawer > summary {
+  list-style: none;
+  cursor: pointer;
+  font-weight: 640;
+  color: var(--ink-strong);
+}
+.filter-drawer > summary::-webkit-details-marker { display: none; }
+
+/* On a phone the drawer's bar has to look like something to tap: a whole-width
+   control with a chevron that turns when it opens, the same shape a disclosure
+   takes everywhere else on a phone. Drawn in CSS from two borders so it takes
+   the theme's colour and needs no icon file. */
+.filter-drawer > summary {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: var(--s-2) var(--s-4);
+  gap: var(--s-2);
+  min-height: 2.75rem;
+  margin-inline: calc(var(--s-3) * -1);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--radius-sm);
 }
-.refine-checks { margin-top: var(--s-3); }
-.refine label { font-size: .9rem; font-weight: 400; margin: 0; white-space: nowrap; }
-.refine-checks label { display: inline-flex; align-items: center; gap: .4rem; }
-/* Narrow controls, because there are five of them on one line and the page's
-   default recipe makes every box full width. */
-/* Narrower and shorter than the page default, because there are three of them on
-   one line and the shared recipe makes every box full width.
+.filter-drawer > summary::before {
+  content: "";
+  flex: none;
+  width: 1.1rem;
+  height: .8rem;
+  /* Three lines of falling length: the filter mark, without an icon file. */
+  background:
+    linear-gradient(currentColor, currentColor) top center / 100% 2px no-repeat,
+    linear-gradient(currentColor, currentColor) center / 65% 2px no-repeat,
+    linear-gradient(currentColor, currentColor) bottom center / 30% 2px no-repeat;
+  color: var(--accent);
+}
+.filter-drawer > summary::after {
+  content: "";
+  flex: none;
+  margin-left: auto;
+  width: .55rem;
+  height: .55rem;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: translateY(-25%) rotate(45deg);
+  transition: transform .2s ease;
+}
+.filter-drawer[open] > summary::after { transform: translateY(25%) rotate(-135deg); }
+.filter-drawer > summary:hover { background: var(--pane-raised); }
+@media (prefers-reduced-motion: reduce) {
+  .filter-drawer > summary::after { transition: none; }
+}
+.filter-count {
+  padding: .1rem .55rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: .8rem;
+  font-weight: 550;
+}
+@media (min-width: 56.01rem) {
+  .filter-drawer > summary { display: none; }
+}
 
-   The select keeps its 2.5rem of right padding. That is not spare room: it is
+.listing-results { padding: var(--s-6) var(--s-6) 0; }
+.listing-results h1 { margin-top: 0; }
+
+/* One group per question, divided by a hairline, headed in small caps-ish
+   type: the shape every shopping site has taught people to scan. */
+.filter-group {
+  margin: 0;
+  padding: var(--s-4) 0;
+  border: 0;
+  border-top: 1px solid var(--hairline);
+  min-width: 0;
+}
+.filter-group:first-child { border-top: 0; padding-top: 0; }
+
+/* The search box is a different kind of thing from the filters under it — it
+   asks, they narrow — so it sits on its own darker band, edge to edge across
+   the sidebar, with a firm rule beneath. The band bleeds into the sidebar's
+   padding, which is why that padding is a variable. */
+/* Two classes, so this outranks `.filter-group:first-child`, whose padding-top: 0
+   would otherwise leave the band tight at the top and loose at the bottom. */
+.filter-group.filter-search {
+  margin: calc(var(--sidebar-pad-top) * -1) calc(var(--sidebar-pad) * -1) 0;
+  padding: var(--s-5) var(--sidebar-pad);
+  background: light-dark(oklch(30% .03 258 / .06), oklch(0% 0 0 / .24));
+  border-bottom: 1px solid light-dark(oklch(30% .03 258 / .16), oklch(100% 0 0 / .12));
+}
+.filter-search + .filter-group { border-top: 0; }
+.filter-heading {
+  display: block;
+  margin: 0 0 var(--s-2);
+  padding: 0;
+  font-size: .8rem;
+  font-weight: 640;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.filter-heading label { font: inherit; color: inherit; margin: 0; }
+
+.refine .search { margin: 0; max-width: none; }
+/* The shared control recipe dresses every input in `.refine`, this one too, and
+   a boxed input inside the pill reads as two controls. The pill is the box. */
+.refine .search input {
+  flex-basis: 8rem;
+  padding: .45rem .2rem .45rem .8rem;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.refine .search button { padding-inline: .9rem; }
+
+.filter-options, .filter-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: .15rem;
+}
+.filter-options label {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  padding: .2rem 0;
+  font-size: .95rem;
+  font-weight: 400;
+  color: var(--ink);
+  cursor: pointer;
+}
+.filter-options input { accent-color: var(--accent); margin: 0; }
+
+.filter-links a {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  padding: .3rem .5rem;
+  margin-inline: -.5rem;
+  border-radius: var(--radius-sm);
+  font-size: .95rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+.filter-links a::before {
+  content: "";
+  flex: none;
+  width: .5rem;
+  height: .5rem;
+  border-radius: 50%;
+  background: var(--code, var(--muted));
+}
+.filter-links a:hover { background: var(--pane-raised); color: var(--ink-strong); }
+
+/* "Show more" under the categories: a quiet link-looking button, always under
+   the list. listing-filters.js adds `.is-folded` and unhides the button. */
+[data-fold].is-folded .fold-extra { display: none; }
+.fold-toggle {
+  margin-top: .15rem;
+  padding: .3rem 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--accent);
+  font-size: .9rem;
+  font-weight: 400;
+}
+.fold-toggle:hover { background: none; color: var(--accent-hover); text-decoration: underline; }
+.fold-toggle[hidden] { display: none; }
+.filter-links a.active { font-weight: 640; color: var(--ink-strong); background: var(--accent-wash); }
+
+/* The select keeps its 2.5rem of right padding. That is not spare room: it is
    what the drawn caret sits in, and a `padding` shorthand here would put the
    longest option name straight underneath it. */
-.refine :is(select, input[type=number]) { width: auto; min-width: 7rem; }
-.refine input[type=number] { padding: .45rem .6rem; }
+.refine :is(select, input[type=number]) { width: 100%; }
+.refine input[type=number] { padding: .45rem .7rem; }
 .refine select:not([multiple]) { padding: .45rem 2.5rem .45rem .7rem; }
 
-/* The same submit as the Search button above it, so it should not look like a
-   second, louder decision. */
+/* For actions that share a submit with something louder, so they do not read
+   as a second decision. */
 .button-quiet {
   background: transparent;
   color: var(--accent);
@@ -817,8 +988,83 @@ a.tag:hover { color: var(--ink-strong); }
   box-shadow: none;
 }
 .button-quiet:hover { background: var(--pane-raised); color: var(--accent-hover); }
-.refine-actions { display: flex; align-items: center; gap: var(--s-4); margin-top: var(--s-4); }
-.refine-actions .clear { font-size: .9rem; }
+
+/* Near a place: the box, then the location button, then the distance, stacked
+   to fit the sidebar's width. */
+.refine-near { display: grid; gap: var(--s-2); }
+.refine-near input.address-picker__input { padding: .45rem .7rem; }
+.refine-near .button-quiet { padding: .4rem .9rem; font-size: .9rem; justify-self: start; }
+.refine-near .button-quiet[hidden] { display: none; }
+.inline-label { font-size: .85rem; font-weight: 400; color: var(--muted); margin: var(--s-1) 0 0; }
+.refine-status { margin: var(--s-2) 0 0; font-size: .875rem; color: var(--muted); }
+.refine-status:empty { display: none; }
+
+.refine-actions { padding-top: var(--s-4); border-top: 1px solid var(--hairline); }
+.refine-actions[hidden] { display: none; }
+.refine-actions button { width: 100%; }
+
+/* --- Above the results ---------------------------------------------------- */
+
+.results-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3) var(--s-5);
+  margin: 0 0 var(--s-5);
+  padding-bottom: var(--s-4);
+  border-bottom: 1px solid var(--hairline);
+}
+.result-count { margin: 0; color: var(--muted); }
+.result-count strong { color: var(--ink-strong); }
+
+.active-filters {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+.active-filters a {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .25rem .5rem .25rem .8rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent-wash);
+  color: var(--ink-strong);
+  font-size: .875rem;
+  text-decoration: none;
+}
+.active-filters a:hover { background: var(--pane-raised); }
+.active-filters a span { color: var(--muted); font-size: 1.05rem; line-height: 1; }
+.active-filters a.clear { background: none; color: var(--accent); padding-inline: .4rem; }
+
+.unplaced { margin-top: var(--s-7); }
+.unplaced h2 { margin: 0 0 var(--s-2); }
+.distance { font-weight: 580; color: var(--ink); }
+
+/* Below this the sidebar becomes a drawer above the results: a phone shows
+   programs first and filters on request. Kept in step with listing-filters.js. */
+@media (max-width: 56rem) {
+  .listing { grid-template-columns: minmax(0, 1fr); }
+  .listing-sidebar {
+    /* The drawer's bar sits above the band here, so the band starts below it
+       rather than bleeding up to the edge. */
+    --sidebar-pad-top: 0px; /* a unit, or calc() below rejects the whole margin */
+    padding: var(--s-4) var(--sidebar-pad);
+    border-right: 0;
+    border-bottom: 1px solid var(--hairline);
+    box-shadow: inset 0 -1px 0 var(--edge);
+  }
+  .filter-drawer[open] > summary { margin-bottom: var(--s-4); }
+  .listing-results { padding: var(--s-5) var(--s-5) 0; }
+}
+@media (max-width: 40rem) {
+  .listing-sidebar { --sidebar-pad: var(--s-4); }
+  .listing-results { padding-inline: var(--s-4); }
+}
 
 .program .host { color: var(--muted); margin: calc(var(--s-2) * -1) 0 var(--s-3); }
 .program-section { margin-top: var(--s-6); }

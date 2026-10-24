@@ -101,7 +101,7 @@ ever added, this block needs a hash or a nonce.{% endcomment %}
   </div>
 </header>
 
-<main id="main" class="wrap">
+<main id="main" class="{% block main_class %}wrap{% endblock %}">
   {% if messages %}
     {% for message in messages %}
       <p class="flash {{ message.tags }}">{{ message }}</p>

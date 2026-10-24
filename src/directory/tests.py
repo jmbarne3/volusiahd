@@ -7,6 +7,7 @@ visible on the public site.
 """
 
 import json
+import math
 import os
 import shutil
 import tempfile
@@ -1972,6 +1973,7 @@ class WeekdayFieldTests(TestCase):
         # Nothing to narrow by is not the same as nothing matching.
         self.assertEqual(Program.objects.meeting_on("").count(), 2)
         self.assertEqual(Program.objects.meeting_on("funday").count(), 2)
+        self.assertEqual(list(Program.objects.meeting_on(["thu", "funday"])), [thursday])
 
     def test_the_days_read_as_a_sentence(self):
         program = Program(meeting_days="tue,thu")
@@ -2291,6 +2293,21 @@ class ListingFilterTests(TestCase):
     def test_filtering_by_day(self):
         self.assertEqual(self._names(day="thu"), ["Thursday Club"])
 
+    def test_several_days_mean_any_of_them(self):
+        """Tuesday or Thursday, not Tuesday and Thursday: families tick the days
+        they are free."""
+        self.assertEqual(self._names(day=["thu", "sat"]), ["Saturday League", "Thursday Club"])
+        self.assertEqual(self._names(day=["thu", "mon"]), ["Thursday Club"])
+
+    def test_a_program_that_never_gave_its_days_only_shows_with_no_day_ticked(self):
+        every_day = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        self.assertNotIn("No Idea", self._names(day=every_day))
+        self.assertIn("No Idea", self._names())
+
+    def test_unknown_days_are_ignored_rather_than_emptying_the_list(self):
+        self.assertEqual(self._names(day=["thu", "funday"]), ["Thursday Club"])
+        self.assertEqual(len(self._names(day=["funday"])), 3)
+
     def test_filtering_by_faith_affiliation(self):
         self.assertEqual(self._names(faith="faith"), ["Saturday League"])
 
@@ -2328,7 +2345,7 @@ class ListingFilterTests(TestCase):
 
     def test_the_filters_are_shown_back_so_somebody_can_see_what_is_applied(self):
         response = self.client.get(reverse("directory:program_list"), {"day": "thu", "online": "1"})
-        self.assertEqual(response.context["filters"]["day"], "thu")
+        self.assertEqual(response.context["filters"]["days"], ["thu"])
         self.assertTrue(response.context["filters"]["online"])
         self.assertTrue(response.context["filters_active"])
         self.assertContains(response, "Clear")
@@ -2712,3 +2729,266 @@ class FixtureCollisionTests(TestCase):
         for row in rows:
             with self.subTest(model=row["model"], slug=row["fields"].get("slug")):
                 self.assertIsNone(row.get("pk"), "fixture rows must not carry primary keys")
+
+
+class LocationFilterTests(TestCase):
+    """Narrowing a listing to programs near a place.
+
+    Points used throughout: DeLand, Deltona about nine miles south, Daytona
+    Beach about twenty miles east, Jacksonville about ninety miles north.
+    """
+
+    DELAND = (29.03, -81.30)
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.deltona = cls._program("Deltona Club", "deltona", (28.90, -81.26))
+        cls.daytona = cls._program("Daytona Club", "daytona", (29.21, -81.02))
+        cls.far = cls._program("Jacksonville Club", "jacksonville", (30.33, -81.66))
+        cls.online = cls._program("Online Club", "online", None)
+        # Two places, one far and one near: the near one is what counts.
+        cls.both = cls._program("Two Campus Club", "two-campus", (30.33, -81.66))
+        cls.both.locations.create(query="DeLand", latitude=29.03, longitude=-81.30, sort_order=1)
+
+    @classmethod
+    def _program(cls, name, slug, point):
+        program = Program.objects.create(
+            name=name, slug=slug, short_description=f"{name}.", status=Program.Status.PUBLISHED
+        )
+        if point:
+            program.locations.create(query=name, latitude=point[0], longitude=point[1])
+        else:
+            program.locations.create(query="At members' homes")
+        return program
+
+    def setUp(self):
+        cache.clear()
+
+    def _list(self, **params):
+        return self.client.get(reverse("directory:program_list"), params)
+
+    def _near_deland(self, **params):
+        lat, lng = self.DELAND
+        return self._list(near="DeLand", lat=lat, lng=lng, **params)
+
+    def test_distance_is_measured_in_the_database_to_within_a_tenth_of_a_mile(self):
+        lat, lng = self.DELAND
+        found = Program.objects.near(lat, lng, 50).get(pk=self.daytona.pk)
+        # The same haversine, worked in Python: what the SQL has to agree with.
+        p1, p2 = math.radians(lat), math.radians(29.21)
+        a = (
+            math.sin((p2 - p1) / 2) ** 2
+            + math.cos(p1) * math.cos(p2) * math.sin(math.radians(-81.02 - lng) / 2) ** 2
+        )
+        self.assertAlmostEqual(found.distance, 2 * 3958.8 * math.asin(math.sqrt(a)), delta=0.1)
+
+    def test_only_programs_in_range_are_listed_nearest_first(self):
+        with patch("directory.views.geocoding.search") as search:
+            page = self._near_deland(within=25).content.decode()
+        search.assert_not_called()
+        nearby = page[: page.index("No fixed location")]
+        self.assertNotIn("Jacksonville Club", nearby)
+        self.assertLess(nearby.index("Two Campus Club"), nearby.index("Deltona Club"))
+        self.assertLess(nearby.index("Deltona Club"), nearby.index("Daytona Club"))
+
+    def test_a_narrower_distance_drops_the_further_program(self):
+        page = self._near_deland(within=10).content.decode()
+        self.assertIn("Deltona Club", page)
+        self.assertNotIn("Daytona Club", page)
+
+    def test_a_program_counts_from_its_nearest_place_and_appears_once(self):
+        response = self._near_deland(within=5)
+        self.assertContains(response, 'href="/programs/two-campus/"', count=1)
+        self.assertContains(response, "0.0 mi")
+
+    def test_programs_with_no_point_are_listed_separately_not_dropped(self):
+        page = self._near_deland().content.decode()
+        self.assertIn("No fixed location", page)
+        self.assertGreater(page.index("Online Club"), page.index("No fixed location"))
+
+    def test_without_a_place_the_listing_is_unchanged(self):
+        page = self._list().content.decode()
+        self.assertNotIn("No fixed location", page)
+        self.assertNotIn(" mi</span>", page)
+        for name in ["Deltona Club", "Jacksonville Club", "Online Club"]:
+            self.assertIn(name, page)
+
+    def test_coordinates_are_rounded_before_they_reach_the_page(self):
+        response = self._list(near="Your location", lat="29.031234", lng="-81.303456")
+        self.assertContains(response, 'data-lat="29.03"')
+        self.assertContains(response, 'data-lng="-81.3"')
+        self.assertNotContains(response, "29.0312")
+        self.assertContains(response, "within 25 miles of you")
+
+    def test_a_typed_place_is_looked_up_on_the_server_when_nothing_was_picked(self):
+        found = geocoding.Place(label="DeLand, 32720", latitude=29.03, longitude=-81.30)
+        with patch("directory.views.geocoding.search", return_value=[found]) as search:
+            response = self._list(near="DeLand", within=10)
+            self._list(near="deland", within=10)
+        search.assert_called_once()  # the second, differently cased, came from the cache
+        self.assertContains(response, "Deltona Club")
+        self.assertNotContains(response, "Daytona Club")
+
+    def test_a_geocoder_that_is_down_leaves_the_list_unfiltered_and_says_so(self):
+        with patch("directory.views.geocoding.search", side_effect=geocoding.GeocoderUnavailable):
+            response = self._list(near="DeLand")
+        self.assertContains(response, "could not look up")
+        self.assertContains(response, "Jacksonville Club")
+        self.assertNotContains(response, "No fixed location")
+
+    def test_a_place_nobody_can_find_says_so(self):
+        with patch("directory.views.geocoding.search", return_value=[]):
+            response = self._list(near="Atlantis")
+        self.assertContains(response, "could not find")
+        self.assertContains(response, "Jacksonville Club")
+
+    def test_nonsense_coordinates_and_distances_are_ignored_rather_than_errors(self):
+        with patch("directory.views.geocoding.search", return_value=[]):
+            for params in [
+                {"near": "x", "lat": "abc", "lng": "-81.3"},
+                {"near": "x", "lat": "95", "lng": "-81.3"},
+                {"near": "DeLand", "lat": "29.03", "lng": "-81.3", "within": "9999"},
+                {"near": "DeLand", "lat": "29.03", "lng": "-81.3", "within": "far"},
+            ]:
+                with self.subTest(params=params):
+                    self.assertEqual(self._list(**params).status_code, 200)
+        self.assertContains(
+            self._near_deland(within="9999"), "within 25 miles"
+        )  # an unknown distance falls back to the default
+
+    def test_it_composes_with_the_keyword_search(self):
+        page = self._near_deland(q="club deltona").content.decode()
+        self.assertIn("Deltona Club", page)
+        self.assertNotIn("Daytona Club", page)
+
+    def test_the_script_and_the_page_agree_on_their_hooks(self):
+        js = (settings.BASE_DIR / "src" / "static" / "js" / "address-picker.js").read_text()
+        page = self._list().content.decode()
+        for hook in [
+            "data-near-picker",
+            "data-near-input",
+            "data-near-locate",
+            "data-near-status",
+            "data-address-results",
+        ]:
+            with self.subTest(hook=hook):
+                self.assertIn(hook, js)
+                self.assertIn(hook, page)
+        # Read through `dataset`, which spells the attribute in camel case.
+        self.assertIn("data-your-location", page)
+        self.assertIn("dataset.yourLocation", js)
+        self.assertIn("address-picker.js", page)
+
+
+class ListingSidebarTests(TestCase):
+    """The sidebar and the bar above the results."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.category = Category.objects.create(name="Sports", slug=q.SPORTS)
+        cls.tag = Tag.objects.create(name="Varsity", slug="varsity")
+        Program.objects.create(
+            name="Saturday League",
+            slug="saturday",
+            short_description="Soccer.",
+            status=Program.Status.PUBLISHED,
+            category=cls.category,
+            meeting_days="sat",
+        )
+
+    def _chips(self, **params):
+        response = self.client.get(reverse("directory:program_list"), params)
+        return {chip["label"]: chip["remove_url"] for chip in response.context["active_chips"]}
+
+    def test_each_applied_filter_gets_a_chip_that_removes_only_itself(self):
+        chips = self._chips(day="sat", online="1", tag=["varsity"])
+        self.assertEqual(set(chips), {"Meets Saturday", "Online available", "Varsity"})
+        self.assertNotIn("day=", chips["Meets Saturday"])
+        self.assertIn("online=1", chips["Meets Saturday"])
+        self.assertIn("tag=varsity", chips["Meets Saturday"])
+        self.assertNotIn("tag=", chips["Varsity"])
+
+    def test_each_day_gets_its_own_chip_that_removes_only_that_day(self):
+        chips = self._chips(day=["sat", "tue"])
+        # Week order, not the order they arrived in.
+        self.assertEqual(list(chips), ["Meets Tuesday", "Meets Saturday"])
+        self.assertIn("day=tue", chips["Meets Saturday"])
+        self.assertNotIn("day=sat", chips["Meets Saturday"])
+
+    def test_ticked_days_are_ticked_when_the_page_comes_back(self):
+        response = self.client.get(reverse("directory:program_list"), {"day": ["sat", "tue"]})
+        page = response.content.decode()
+        for code, ticked in [("sat", True), ("tue", True), ("mon", False)]:
+            with self.subTest(code=code):
+                tag = page[page.index(f'name="day" value="{code}"') :].split(">", 1)[0]
+                self.assertEqual("checked" in tag, ticked)
+
+    def test_a_filter_that_was_ignored_gets_no_chip(self):
+        self.assertEqual(self._chips(age="abc", day="someday", faith="maybe"), {})
+
+    def test_switching_category_keeps_the_other_filters(self):
+        response = self.client.get(
+            reverse("directory:program_list"), {"day": "sat", "category": q.SPORTS}
+        )
+        self.assertEqual(response.context["keep_query"], "day=sat")
+        self.assertContains(response, f'href="{self.category.get_absolute_url()}?day=sat"')
+
+    def test_links_on_the_page_never_repeat_exact_coordinates(self):
+        response = self.client.get(
+            reverse("directory:program_list"),
+            {"near": "Your location", "lat": "29.031234", "lng": "-81.303456", "day": "sat"},
+        )
+        self.assertNotContains(response, "29.0312")
+        self.assertIn("lat=29.03", response.context["keep_query"])
+
+    def test_the_count_and_the_empty_message_say_what_happened(self):
+        response = self.client.get(reverse("directory:program_list"), {"day": "sat"})
+        self.assertContains(response, "<strong>1</strong> program")
+        response = self.client.get(reverse("directory:program_list"), {"day": "mon"})
+        self.assertContains(response, "Nothing matches. Try removing a filter.")
+
+    def test_without_a_script_there_is_still_a_button_to_apply_the_filters(self):
+        response = self.client.get(reverse("directory:program_list"))
+        self.assertContains(response, "Apply filters")
+        self.assertContains(response, "listing-filters.js")
+
+
+class CategoryFoldTests(TestCase):
+    """Five categories show; the rest fold, unless the current one is folded."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.categories = [
+            Category.objects.create(name=f"Heading {n:02}", slug=f"heading-{n}", sort_order=n)
+            for n in range(8)
+        ]
+
+    def test_only_five_show_before_the_fold(self):
+        page = self.client.get(reverse("directory:program_list")).content.decode()
+        for n in range(8):
+            with self.subTest(n=n):
+                item = page[: page.index(f"Heading {n:02}")].rsplit("<li", 1)[1]
+                self.assertEqual("fold-extra" in item, n >= 5)
+        self.assertIn('data-more="Show 3 more"', page)
+        self.assertNotIn("data-fold-open", page)
+
+    def test_the_toggle_sits_under_the_whole_list(self):
+        page = self.client.get(reverse("directory:program_list")).content.decode()
+        self.assertGreater(page.index("data-fold-toggle"), page.index("Heading 07"))
+
+    def test_the_fold_starts_open_when_the_current_category_is_inside_it(self):
+        page = self.client.get(self.categories[6].get_absolute_url()).content.decode()
+        self.assertIn("data-fold-open", page)
+
+    def test_the_script_and_the_page_agree_on_the_fold(self):
+        js = (settings.BASE_DIR / "src" / "static" / "js" / "listing-filters.js").read_text()
+        css = (settings.BASE_DIR / "src" / "static" / "css" / "site.css").read_text()
+        for hook in ["[data-fold]", "data-fold-toggle", "data-fold-open", "is-folded"]:
+            with self.subTest(hook=hook):
+                self.assertIn(hook, js)
+        self.assertIn("[data-fold].is-folded .fold-extra", css)
+
+    def test_there_is_no_affiliation_filter_but_old_links_still_work(self):
+        response = self.client.get(reverse("directory:program_list"), {"faith": "faith"})
+        self.assertNotContains(response, 'name="faith"')
+        self.assertEqual(response.status_code, 200)

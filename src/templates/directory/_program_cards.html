@@ -7,10 +7,11 @@
       <p class="meta">
         {% if program.category %}<span class="tag c{{ program.category|colour_code }}">{{ program.category.name }}</span>{% endif %}
         {% if program.step_up_display %}<span class="tag step-up">{{ program.step_up_display }}</span>{% endif %}
+        {% if program.distance or program.distance == 0 %}<span class="distance">{{ program.distance|floatformat:1 }} mi</span>{% endif %}
         {% if program.primary_location %}<span class="where">{{ program.primary_location|truncatechars:40 }}{% if program.location_list|length > 1 %} +{{ program.location_list|length|add:"-1" }}{% endif %}</span>{% endif %}
       </p>
     </li>
   {% empty %}
-    <li class="empty">Nothing here yet.</li>
+    <li class="empty">{% firstof empty_message "Nothing here yet." %}</li>
   {% endfor %}
 </ul>

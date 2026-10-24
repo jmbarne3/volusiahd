@@ -1,9 +1,10 @@
 /* The address picker, for the public forms and the admin.
  *
- * One behaviour, two places to put the answer. On a public form the places
+ * One behaviour, three places to put the answer. On a public form the places
  * somebody picks become removable rows under the search box, each carrying a
  * hidden input, and the whole set is submitted at once. In the admin the search
- * box sits in an inline row and a pick fills that row's own fields.
+ * box sits in an inline row and a pick fills that row's own fields. On a
+ * program listing, a pick is the point the list is filtered near.
  *
  * Nothing here is load-bearing. Without it the public form falls back to a
  * textarea, one address per line, and the admin falls back to typing an address
@@ -363,11 +364,108 @@
     });
   }
 
+  /* --- The listing filter: a pick becomes the point to search near -------- */
+
+  /* Two places a point can come from, and neither asks anybody but the
+   * browser. A pick from the suggestions already carries coordinates, and "Use
+   * my location" reads the device's own. The coordinates live in hidden inputs
+   * this script adds, never in the markup, so that editing the box can throw
+   * them away: a family who types "Deltona" over "DeLand" must not quietly get
+   * DeLand's results. */
+  function nearPicker(root) {
+    if (root.dataset.addressReady) return;
+    root.dataset.addressReady = "1";
+
+    var input = root.querySelector("[data-near-input]");
+    var results = root.querySelector("[data-address-results]");
+    var locate = root.querySelector("[data-near-locate]");
+    var form = input && input.form;
+    var status = form && form.querySelector("[data-near-status]");
+    if (!input || !results || !form) return;
+
+    function say(message) {
+      if (status) status.textContent = message;
+    }
+
+    function clearPoint() {
+      Array.prototype.forEach.call(form.querySelectorAll("[data-near-point]"), function (el) {
+        el.remove();
+      });
+    }
+
+    /* Two decimal places is about a kilometre: close enough to sort a county's
+     * programs by distance, too coarse to give away which house somebody is in
+     * when the link is shared. The server rounds again regardless. */
+    function setPoint(latitude, longitude) {
+      clearPoint();
+      [["lat", latitude], ["lng", longitude]].forEach(function (pair) {
+        var hidden = document.createElement("input");
+        hidden.type = "hidden";
+        hidden.name = pair[0];
+        hidden.value = Number(pair[1]).toFixed(2);
+        hidden.setAttribute("data-near-point", "");
+        root.appendChild(hidden);
+      });
+    }
+
+    if (root.dataset.lat && root.dataset.lng) setPoint(root.dataset.lat, root.dataset.lng);
+    input.addEventListener("input", clearPoint);
+
+    suggest(input, {
+      results: results,
+      endpoint: root.dataset.endpoint,
+      minChars: parseInt(root.dataset.minChars, 10) || 3,
+      debounce: parseInt(root.dataset.debounce, 10) || 450,
+      onPick: function (place) {
+        input.value = place.label || place.query;
+        if (place.latitude !== null && place.longitude !== null) {
+          setPoint(place.latitude, place.longitude);
+        }
+        // A sidebar that applies as it goes applies a picked place too.
+        if (root.hasAttribute("data-submit-on-pick")) {
+          if (form.requestSubmit) form.requestSubmit();
+          else form.submit();
+        }
+      },
+      onUnavailable: function () {
+        say("Place suggestions are unavailable just now. Type a town and press Search.");
+      }
+    });
+
+    /* Geolocation only exists on a secure page, and a button that can only
+     * fail is worse than no button. */
+    if (!locate || !navigator.geolocation || !window.isSecureContext) return;
+    locate.hidden = false;
+    locate.addEventListener("click", function () {
+      say("Finding your location…");
+      locate.disabled = true;
+      navigator.geolocation.getCurrentPosition(
+        function (position) {
+          input.value = root.dataset.yourLocation || "Your location";
+          setPoint(position.coords.latitude, position.coords.longitude);
+          if (form.requestSubmit) form.requestSubmit();
+          else form.submit();
+        },
+        function (error) {
+          locate.disabled = false;
+          say(
+            error.code === error.PERMISSION_DENIED
+              ? "Location access is turned off for this site. Type a town instead."
+              : "We could not get your location. Type a town instead."
+          );
+        },
+        // A town-sized answer is all this needs, so no GPS and a cached fix is fine.
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }
+      );
+    });
+  }
+
   function start() {
     Array.prototype.forEach.call(
       document.querySelectorAll("[data-address-picker]"),
       chipPicker
     );
+    Array.prototype.forEach.call(document.querySelectorAll("[data-near-picker]"), nearPicker);
     Array.prototype.forEach.call(document.querySelectorAll("[data-address-row]"), rowPicker);
   }
 

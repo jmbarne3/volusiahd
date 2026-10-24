@@ -13,14 +13,18 @@ they should have to go hunting through paragraphs for. It stays optional, and
 "not stated" is a perfectly good answer to publish.
 """
 
+import math
 import re
 import time
+from functools import reduce
+from operator import or_
 
 from django import forms
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from django.db.models import Q
+from django.db.models import Exists, F, FloatField, OuterRef, Q, Subquery, Value
+from django.db.models.functions import ASin, Cos, Least, Power, Radians, Sin, Sqrt
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import escape
@@ -735,15 +739,23 @@ class ProgramQuerySet(models.QuerySet):
     def published(self):
         return self.filter(status=Program.Status.PUBLISHED)
 
-    def meeting_on(self, day):
-        """Programs that meet on a given weekday.
+    def meeting_on(self, days):
+        """Programs that meet on any of the given weekdays — one code, or several.
+
+        Any, not all: a family ticking Tuesday and Thursday is saying which days
+        they are free, and a program meeting on either one fits. Unknown codes
+        are dropped, and nothing left means no filter at all.
 
         A substring test, which is exact here and only here: see `WeekdaysField`
-        for why no day's code can match another's.
+        for why no day's code can match another's. Every condition is on the same
+        column, so several days cost a few more comparisons per row, not a join.
         """
-        if day not in WEEKDAY_NAMES:
+        if isinstance(days, str):
+            days = [days]
+        days = [day for day in dict.fromkeys(days) if day in WEEKDAY_NAMES]
+        if not days:
             return self
-        return self.filter(meeting_days__contains=day)
+        return self.filter(reduce(or_, (Q(meeting_days__contains=day) for day in days)))
 
     def with_faith_basis(self, basis):
         if basis not in SharedProgramFields.Faith.values:
@@ -757,6 +769,37 @@ class ProgramQuerySet(models.QuerySet):
 
     def direct_pay(self):
         return self.filter(step_up_direct_pay=True)
+
+    def near(self, latitude, longitude, miles):
+        """Programs meeting within `miles` of a point, each annotated with `distance`.
+
+        A program counts if any one of its meeting places is in range, and its
+        distance is the nearest of them: a co-op meeting in DeLand and Deltona
+        is ten minutes from somebody in Orange City, whichever campus is the
+        first one listed.
+
+        The nearest place is a subquery rather than a join, so this adds one
+        filter to the query however many places a program has — and composes
+        with the keyword search without multiplying its rows.
+        """
+        nearest = (
+            ProgramLocation.objects.filter(program=OuterRef("pk"))
+            .within_box(latitude, longitude, miles)
+            .annotate(miles=miles_from(latitude, longitude))
+            .filter(miles__lte=miles)
+            .order_by("miles")
+            .values("miles")[:1]
+        )
+        return self.annotate(distance=Subquery(nearest, output_field=FloatField())).filter(
+            distance__isnull=False
+        )
+
+    def without_a_point(self):
+        """Programs a distance search cannot place: online, at members' homes,
+        travelling to the family, or an address nobody has resolved yet."""
+        return self.exclude(
+            Exists(ProgramLocation.objects.mappable().filter(program=OuterRef("pk")))
+        )
 
     def serving_age(self, age):
         """Programs that could take a child of this age.
@@ -921,7 +964,44 @@ class Program(SanitizedRichTextMixin, SharedProgramFields):
         self.last_verified_on = on or timezone.localdate()
 
 
+EARTH_RADIUS_MILES = 3958.8
+MILES_PER_DEGREE_OF_LATITUDE = 69.0
+
+
+def miles_from(latitude, longitude):
+    """The haversine distance from a point to a location row, as a query expression.
+
+    Django registers the trigonometry it needs on SQLite itself, so this runs in
+    the database on SQLite and Postgres alike. `Least` keeps rounding error from
+    handing `ASin` a number a hair over one, which is a domain error rather than
+    a distance.
+    """
+    half_lat = (Radians(F("latitude")) - math.radians(latitude)) / 2
+    half_lng = (Radians(F("longitude")) - math.radians(longitude)) / 2
+    a = Power(Sin(half_lat), 2) + Value(math.cos(math.radians(latitude))) * Cos(
+        Radians(F("latitude"))
+    ) * Power(Sin(half_lng), 2)
+    return 2 * EARTH_RADIUS_MILES * ASin(Least(Sqrt(a), Value(1.0)))
+
+
 class LocationQuerySet(models.QuerySet):
+    def within_box(self, latitude, longitude, miles):
+        """Places inside a box around the point, for the index to cut the field down.
+
+        Cheap and slightly generous: the corners of the box are further away than
+        `miles`, so the real distance still has to be checked on what is left.
+        """
+        lat_span = miles / MILES_PER_DEGREE_OF_LATITUDE
+        # A degree of longitude shrinks toward the poles. Clamped so that a point
+        # at the pole widens the box to everything rather than dividing by zero.
+        lng_span = miles / (
+            MILES_PER_DEGREE_OF_LATITUDE * max(math.cos(math.radians(latitude)), 0.01)
+        )
+        return self.filter(
+            latitude__range=(latitude - lat_span, latitude + lat_span),
+            longitude__range=(longitude - lng_span, longitude + lng_span),
+        )
+
     def pending(self):
         """The ones nothing has looked up yet — what a retry works through."""
         return self.filter(status=self.model.Status.PENDING)

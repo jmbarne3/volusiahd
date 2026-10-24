@@ -76,8 +76,8 @@ def parse_place(raw):
     if not query:
         raise forms.ValidationError("That address had nothing in it. Please add it again.")
 
-    latitude = _coordinate(payload.get("latitude"), 90)
-    longitude = _coordinate(payload.get("longitude"), 180)
+    latitude = parse_coordinate(payload.get("latitude"), 90)
+    longitude = parse_coordinate(payload.get("longitude"), 180)
     return _place(
         query=query,
         label=str(payload.get("label") or "").strip(),
@@ -114,7 +114,7 @@ def _place(**values):
     return place
 
 
-def _coordinate(value, limit):
+def parse_coordinate(value, limit):
     """A float inside ±limit, or None. Never an exception and never a wrong number."""
     try:
         number = float(value)
