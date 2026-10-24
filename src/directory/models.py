@@ -64,75 +64,121 @@ WEEKDAY_ORDER = [code for code, _ in WEEKDAYS]
 WEEKDAY_NAMES = dict(WEEKDAYS)
 
 
-def split_weekdays(value):
-    """Whatever a weekday value holds, as an ordered list of valid codes.
+# Grade levels as US schools — and Volusia County Schools — divide them. Codes
+# are chosen so that none is a substring of another, for the same reason the
+# weekday codes are: see `CodeListField`.
+GRADE_LEVELS = [
+    ("prek", "Pre-K"),
+    ("elementary", "Elementary (K–5)"),
+    ("middle", "Middle school (6–8)"),
+    ("high", "High school (9–12)"),
+]
+GRADE_LEVEL_NAMES = dict(GRADE_LEVELS)
+
+
+def split_codes(value, choices):
+    """Whatever a code-list value holds, as an ordered list of valid codes.
 
     Accepts the stored string, a list from a form, or None, and always returns
-    the days in week order rather than the order somebody happened to tick them.
-    Anything unrecognised is dropped rather than raising: a garbled value should
-    mean "we do not know which days" and not a 500 on a program page.
+    the codes in the order `choices` gives them rather than the order somebody
+    happened to tick them. Anything unrecognised is dropped rather than raising:
+    a garbled value should mean "we do not know" and not a 500 on a program page.
     """
     if not value:
         return []
     codes = value.split(",") if isinstance(value, str) else list(value)
     codes = {str(code).strip().lower() for code in codes}
-    return [code for code in WEEKDAY_ORDER if code in codes]
+    return [code for code, _ in choices if code in codes]
+
+
+def join_codes(value, choices):
+    """The canonical stored form: in order, comma separated, no spaces."""
+    return ",".join(split_codes(value, choices))
+
+
+def _unknown_codes(value, choices):
+    known = {code for code, _ in choices}
+    codes = value.split(",") if isinstance(value, str) else list(value or [])
+    return [code for code in codes if code and code not in known]
+
+
+def split_weekdays(value):
+    return split_codes(value, WEEKDAYS)
 
 
 def join_weekdays(value):
-    """The canonical stored form: week order, comma separated, no spaces."""
-    return ",".join(split_weekdays(value))
+    return join_codes(value, WEEKDAYS)
 
 
 def validate_weekdays(value):
-    codes = value.split(",") if isinstance(value, str) else list(value or [])
-    unknown = [code for code in codes if code and code not in WEEKDAY_NAMES]
-    if unknown:
+    if unknown := _unknown_codes(value, WEEKDAYS):
         raise ValidationError(f"Not days of the week: {', '.join(unknown)}.")
 
 
-class WeekdayChoiceField(forms.MultipleChoiceField):
-    """Seven checkboxes in, one stored string out."""
+def split_grade_levels(value):
+    return split_codes(value, GRADE_LEVELS)
+
+
+def validate_grade_levels(value):
+    if unknown := _unknown_codes(value, GRADE_LEVELS):
+        raise ValidationError(f"Not grade levels: {', '.join(unknown)}.")
+
+
+class CodeChoiceField(forms.MultipleChoiceField):
+    """A row of checkboxes in, one stored string out."""
 
     widget = forms.CheckboxSelectMultiple
 
-    def __init__(self, **kwargs):
-        kwargs.setdefault("choices", WEEKDAYS)
+    def __init__(self, *, choices, **kwargs):
         kwargs.setdefault("required", False)
-        super().__init__(**kwargs)
+        super().__init__(choices=choices, **kwargs)
+        self.code_choices = choices
 
     def prepare_value(self, value):
         # The model hands back "mon,thu"; the checkboxes need ["mon", "thu"].
-        return split_weekdays(value) if isinstance(value, str) else value
+        return split_codes(value, self.code_choices) if isinstance(value, str) else value
 
     def clean(self, value):
-        return join_weekdays(super().clean(value))
+        return join_codes(super().clean(value), self.code_choices)
 
     def has_changed(self, initial, data):
-        return join_weekdays(initial) != join_weekdays(data)
+        return join_codes(initial, self.code_choices) != join_codes(data, self.code_choices)
 
 
-class WeekdaysField(models.CharField):
-    """The days of the week something meets, as a comma separated list of codes.
+class WeekdayChoiceField(CodeChoiceField):
+    """Seven checkboxes in, one stored string out."""
 
-    Text rather than seven boolean columns, a join table, or a bitmask, and the
-    reason is one convenient accident: no day's three-letter code is a substring
-    of another's. That makes `filter(meeting_days__contains="thu")` an exact
-    test rather than a near-miss waiting to happen, so the one query this field
-    exists to answer — "what meets on Thursdays" — needs no cleverness at all.
+    def __init__(self, **kwargs):
+        kwargs.setdefault("choices", WEEKDAYS)
+        super().__init__(**kwargs)
+
+
+class CodeListField(models.CharField):
+    """Several answers from a short fixed list, as a comma separated string of codes.
+
+    Text rather than a column per answer, a join table, or a bitmask, and the
+    reason is one convenient accident that each subclass's codes are chosen to
+    keep: no code is a substring of another. That makes
+    `filter(meeting_days__contains="thu")` an exact test rather than a near-miss
+    waiting to happen, so the one query these fields exist to answer — "what
+    meets on Thursdays", "what takes middle schoolers" — needs no cleverness.
 
     It is a scan rather than an index seek. Over a directory of a few hundred
-    programs that is not worth a column per day; if this ever becomes the slow
-    part of a page, the honest fix is seven generated columns and not a rewrite
-    of everything that reads it.
+    programs that is not worth a column per answer; if this ever becomes the slow
+    part of a page, the honest fix is generated columns and not a rewrite of
+    everything that reads it.
     """
 
+    code_choices = []
+    validator = None
+
     def __init__(self, *args, **kwargs):
-        # Seven codes and six commas. Set here rather than at each use so the two
-        # concrete models cannot disagree about it.
-        kwargs["max_length"] = 27
+        # Every code and the commas between them. Set here rather than at each use
+        # so the two concrete models cannot disagree about it.
+        codes = [code for code, _ in self.code_choices]
+        kwargs["max_length"] = sum(map(len, codes)) + len(codes) - 1
         kwargs.setdefault("blank", True)
-        kwargs.setdefault("validators", [validate_weekdays])
+        kwargs.setdefault("validators", [type(self).validator])
         super().__init__(*args, **kwargs)
 
     def deconstruct(self):
@@ -144,7 +190,7 @@ class WeekdaysField(models.CharField):
         # A list assigned straight onto the instance is normalised on the way to
         # the database, so a shell script and the form store the same thing.
         if not isinstance(value, str) and value is not None:
-            value = join_weekdays(value)
+            value = join_codes(value, self.code_choices)
         return super().get_prep_value(value)
 
     def formfield(self, **kwargs):
@@ -154,11 +200,26 @@ class WeekdaysField(models.CharField):
             "required": not self.blank,
             "label": capfirst(self.verbose_name),
             "help_text": self.help_text,
+            "choices": self.code_choices,
         }
         defaults.update(kwargs)
         for unusable in ["max_length", "empty_value", "widget"]:
             defaults.pop(unusable, None)
-        return WeekdayChoiceField(**defaults)
+        return CodeChoiceField(**defaults)
+
+
+class WeekdaysField(CodeListField):
+    """The days of the week something meets: "mon,thu"."""
+
+    code_choices = WEEKDAYS
+    validator = staticmethod(validate_weekdays)
+
+
+class GradeLevelsField(CodeListField):
+    """The grade levels a program takes: "elementary,middle"."""
+
+    code_choices = GRADE_LEVELS
+    validator = staticmethod(validate_grade_levels)
 
 
 class SanitizedRichTextMixin(models.Model):
@@ -505,13 +566,11 @@ class SharedProgramFields(models.Model):
 
     # --- Who it serves ------------------------------------------------------
 
-    serves_grades = models.CharField(
-        max_length=80,
-        blank=True,
-        help_text="Free text, e.g. 'K-8' or 'high school only'. Leave blank if it varies.",
+    grade_levels = GradeLevelsField(
+        "grade levels",
+        help_text="Tick every level they take. Families filter by this, and a "
+        "program with none ticked shows up under every level.",
     )
-    age_min = models.PositiveSmallIntegerField(null=True, blank=True)
-    age_max = models.PositiveSmallIntegerField(null=True, blank=True)
 
     # --- When ---------------------------------------------------------------
 
@@ -635,14 +694,13 @@ class SharedProgramFields(models.Model):
         return {name: getattr(self, name) for name in self.shared_field_names()}
 
     @property
-    def age_range_display(self):
-        if self.age_min and self.age_max:
-            return f"Ages {self.age_min}-{self.age_max}"
-        if self.age_min:
-            return f"Ages {self.age_min} and up"
-        if self.age_max:
-            return f"Through age {self.age_max}"
-        return ""
+    def grade_level_list(self):
+        return split_grade_levels(self.grade_levels)
+
+    @property
+    def grade_levels_display(self):
+        """The levels as a family reads them: "Elementary (K–5), Middle school (6–8)"."""
+        return ", ".join(GRADE_LEVEL_NAMES[code] for code in self.grade_level_list)
 
     @property
     def step_up_display(self):
@@ -801,21 +859,22 @@ class ProgramQuerySet(models.QuerySet):
             Exists(ProgramLocation.objects.mappable().filter(program=OuterRef("pk")))
         )
 
-    def serving_age(self, age):
-        """Programs that could take a child of this age.
+    def at_grade_levels(self, levels):
+        """Programs taking any of the given grade levels — one code, or several.
 
-        A blank age bound means "we do not know", and an unknown bound has to
-        widen the answer rather than narrow it — dropping every program that
-        never filled in an age range would hide most of the directory from the
-        one filter most likely to be used.
+        Any, not all, as with days: a family with a third grader and a seventh
+        grader ticks both and wants either. A program that never said which
+        levels it takes is kept, because an unknown has to widen the answer
+        rather than narrow it — dropping it would hide a program for nothing more
+        than an unanswered question.
         """
-        try:
-            age = int(age)
-        except (TypeError, ValueError):
+        if isinstance(levels, str):
+            levels = [levels]
+        levels = [level for level in dict.fromkeys(levels) if level in GRADE_LEVEL_NAMES]
+        if not levels:
             return self
         return self.filter(
-            Q(age_min__lte=age) | Q(age_min__isnull=True),
-            Q(age_max__gte=age) | Q(age_max__isnull=True),
+            reduce(or_, (Q(grade_levels__contains=level) for level in levels)) | Q(grade_levels="")
         )
 
     def tagged(self, slugs):

@@ -6,6 +6,7 @@ reaching a template that renders with `|safe`, and a draft program being
 visible on the public site.
 """
 
+import importlib
 import json
 import math
 import os
@@ -33,6 +34,7 @@ from . import geocoding
 from . import questions as q
 from .addresses import DEBOUNCE_MS, MIN_QUERY_CHARS, LocationsField
 from .models import (
+    GRADE_LEVELS,
     WEEKDAY_NAMES,
     Category,
     ContactPerson,
@@ -465,9 +467,7 @@ class RegistrationTests(TestCase):
             "email": "hello@coastal.example.org",
             "phone": "386-555-0100",
             "locations": "12 Ocean Ave, Ormond Beach 32176\n4 Granada Blvd, Ormond Beach 32176",
-            "serves_grades": "K–8",
-            "age_min": "5",
-            "age_max": "14",
+            "grade_levels": ["elementary", "middle"],
             "cost_notes": "$45 per semester.",
             "step_up_direct_pay": "on",
             "step_up_pep": "on",
@@ -487,7 +487,7 @@ class RegistrationTests(TestCase):
         submission = Submission.objects.get()
         self.assertEqual(submission.kind, Submission.Kind.REGISTRATION)
         self.assertEqual(submission.status, Submission.Status.NEW)
-        self.assertEqual(submission.serves_grades, "K–8")
+        self.assertEqual(submission.grade_levels, "elementary,middle")
         self.assertTrue(submission.is_authorized)
 
     def test_a_program_can_meet_in_more_than_one_place(self):
@@ -510,7 +510,7 @@ class RegistrationTests(TestCase):
         self.assertEqual(Submission.objects.count(), 0)
 
     def test_grades_served_is_required(self):
-        response = self.client.post(reverse("directory:register"), self._payload(serves_grades=""))
+        response = self.client.post(reverse("directory:register"), self._payload(grade_levels=[]))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(Submission.objects.count(), 0)
 
@@ -689,9 +689,9 @@ class RegistrationTests(TestCase):
         self.assertFalse(submission.step_up_direct_pay)
         self.assertFalse(submission.step_up_pep)
 
-    def test_age_range_must_make_sense(self):
+    def test_a_grade_level_that_is_not_one_is_refused(self):
         response = self.client.post(
-            reverse("directory:register"), self._payload(age_min="14", age_max="5")
+            reverse("directory:register"), self._payload(grade_levels=["college"])
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(Submission.objects.count(), 0)
@@ -771,9 +771,7 @@ class ApprovalTests(TestCase):
             "email": "hello@coastal.example.org",
             "phone": "386-555-0100",
             "locations": "12 Ocean Ave, Ormond Beach 32176\n4 Granada Blvd, Ormond Beach 32176",
-            "serves_grades": "K–8",
-            "age_min": 5,
-            "age_max": 14,
+            "grade_levels": "elementary,middle",
             "cost_notes": "$45 per semester.",
             "meeting_schedule": "Thursdays 9am–noon.",
             "step_up_direct_pay": True,
@@ -836,9 +834,7 @@ class ApprovalTests(TestCase):
             program.location_list,
             ["12 Ocean Ave, Ormond Beach 32176", "4 Granada Blvd, Ormond Beach 32176"],
         )
-        self.assertEqual(program.serves_grades, "K–8")
-        self.assertEqual(program.age_min, 5)
-        self.assertEqual(program.age_max, 14)
+        self.assertEqual(program.grade_levels, "elementary,middle")
         self.assertEqual(program.cost_notes, "$45 per semester.")
         self.assertEqual(program.meeting_schedule, "Thursdays 9am–noon.")
         self.assertTrue(program.step_up_direct_pay)
@@ -1671,7 +1667,7 @@ class AddressPickerFormTests(TestCase):
             "category": str(self.category.pk),
             "website": "https://coastal.example.org",
             "locations": locations,
-            "serves_grades": "K–8",
+            "grade_levels": ["elementary", "middle"],
             "submitter_name": "Dana Reed",
             "submitter_email": "dana@coastal.example.org",
             "is_authorized": "on",
@@ -1763,7 +1759,7 @@ class AddressPickerFormTests(TestCase):
             }
         )
         response = self.client.post(
-            reverse("directory:register"), self._payload([picked], serves_grades="")
+            reverse("directory:register"), self._payload([picked], grade_levels=[])
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "12 Ocean Avenue")
@@ -1854,10 +1850,10 @@ class QuestionMapTests(TestCase):
         self.assertIn("program_name", q.fields_for(None))
 
     def test_a_heading_is_only_required_to_answer_what_it_is_asked(self):
-        self.assertIn("serves_grades", q.required_for(q.CO_OPS))
+        self.assertIn("grade_levels", q.required_for(q.CO_OPS))
         # A parent support group serves the adults, so it is never asked.
-        self.assertNotIn("serves_grades", q.fields_for(q.PARENT_SUPPORT))
-        self.assertNotIn("serves_grades", q.required_for(q.PARENT_SUPPORT))
+        self.assertNotIn("grade_levels", q.fields_for(q.PARENT_SUPPORT))
+        self.assertNotIn("grade_levels", q.required_for(q.PARENT_SUPPORT))
         self.assertIn("program_name", q.required_for(q.PARENT_SUPPORT))
 
 
@@ -1894,9 +1890,7 @@ class SharedFieldTests(TestCase):
             facebook="https://facebook.com/groups/x",
             email="hi@example.org",
             phone="386-555-0000",
-            serves_grades="K-8",
-            age_min=5,
-            age_max=14,
+            grade_levels="elementary,middle",
             meeting_days="tue,thu",
             meeting_time_start="09:00",
             meeting_time_end="12:00",
@@ -2053,7 +2047,7 @@ class ScopedFormTests(TestCase):
             "category": str(self.co_ops.pk),
             "email": "hello@coastal.example.org",
             "locations": "12 Ocean Ave, Ormond Beach 32176",
-            "serves_grades": "K-8",
+            "grade_levels": ["elementary", "middle"],
             "submitter_name": "Dana Reed",
             "submitter_email": "dana@coastal.example.org",
             "is_authorized": "on",
@@ -2089,11 +2083,11 @@ class ScopedFormTests(TestCase):
         self.assertEqual(submission.enrollment_notes, "")
         self.assertEqual(submission.host_name, "")
         # And the questions tutoring *is* asked still work.
-        self.assertEqual(submission.serves_grades, "K-8")
+        self.assertEqual(submission.grade_levels, "elementary,middle")
 
     def test_a_boolean_nobody_was_asked_about_comes_back_false(self):
         submission = self._submit(
-            category=str(self.parents.pk), serves_grades="", step_up_direct_pay="on"
+            category=str(self.parents.pk), grade_levels=[], step_up_direct_pay="on"
         )
         self.assertFalse(submission.step_up_direct_pay)
 
@@ -2108,17 +2102,17 @@ class ScopedFormTests(TestCase):
         self.assertEqual(submission.host_name, "A Host")
 
     def test_grades_are_required_of_a_heading_that_is_asked_for_them(self):
-        response = self.client.post(reverse("directory:register"), self._payload(serves_grades=""))
+        response = self.client.post(reverse("directory:register"), self._payload(grade_levels=[]))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(Submission.objects.count(), 0)
 
     def test_grades_are_not_required_of_a_heading_that_is_never_asked(self):
-        submission = self._submit(category=str(self.parents.pk), serves_grades="")
-        self.assertEqual(submission.serves_grades, "")
+        submission = self._submit(category=str(self.parents.pk), grade_levels=[])
+        self.assertEqual(submission.grade_levels, "")
 
     def test_grades_are_still_required_when_no_heading_was_chosen(self):
         response = self.client.post(
-            reverse("directory:register"), self._payload(category="", serves_grades="")
+            reverse("directory:register"), self._payload(category="", grade_levels=[])
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(Submission.objects.count(), 0)
@@ -2179,7 +2173,7 @@ class TagQuestionTests(TestCase):
             "category": str(self.sports.pk),
             "email": "hello@coastal.example.org",
             "locations": "12 Ocean Ave, Ormond Beach 32176",
-            "serves_grades": "K-12",
+            "grade_levels": ["elementary", "middle", "high"],
             "submitter_name": "Dana Reed",
             "submitter_email": "dana@coastal.example.org",
             "is_authorized": "on",
@@ -2261,7 +2255,7 @@ class ListingFilterTests(TestCase):
         cls.saturday_tag = Tag.objects.create(name="Soccer", slug="soccer")
 
         cls.thursday = cls._program(
-            "Thursday Club", "thursday", meeting_days="thu", age_min=10, age_max=14
+            "Thursday Club", "thursday", meeting_days="thu", grade_levels="elementary,middle"
         )
         cls.saturday = cls._program(
             "Saturday League",
@@ -2317,16 +2311,26 @@ class ListingFilterTests(TestCase):
     def test_filtering_by_direct_pay(self):
         self.assertEqual(self._names(directpay="1"), ["Saturday League"])
 
-    def test_an_age_filter_keeps_the_programs_that_never_said(self):
-        """An unknown bound has to widen the answer, not narrow it.
+    def test_a_grade_filter_keeps_the_programs_that_never_said(self):
+        """An unknown has to widen the answer, not narrow it.
 
-        Dropping every program that left its age range blank would hide most of
-        the directory behind the filter most likely to be used.
+        Dropping every program that left its grade levels blank would hide them
+        behind the filter most likely to be used.
         """
-        self.assertEqual(self._names(age="12"), ["No Idea", "Saturday League", "Thursday Club"])
-        # Outside the one range we know about, that program drops out and the
-        # ones that never said still stand.
-        self.assertEqual(self._names(age="3"), ["No Idea", "Saturday League"])
+        self.assertEqual(
+            self._names(grade="middle"), ["No Idea", "Saturday League", "Thursday Club"]
+        )
+        # Outside the levels we know about, that program drops out and the ones
+        # that never said still stand.
+        self.assertEqual(self._names(grade="prek"), ["No Idea", "Saturday League"])
+
+    def test_several_grade_levels_mean_any_of_them(self):
+        self.assertIn("Thursday Club", self._names(grade=["prek", "elementary"]))
+        self.assertNotIn("Thursday Club", self._names(grade=["prek", "high"]))
+
+    def test_unknown_grade_levels_and_old_age_links_are_ignored(self):
+        self.assertEqual(len(self._names(grade="college")), 3)
+        self.assertEqual(len(self._names(age="12")), 3)
 
     def test_each_tag_narrows_the_list_rather_than_widening_it(self):
         """Two tags means both, not either.
@@ -2341,7 +2345,7 @@ class ListingFilterTests(TestCase):
 
     def test_nothing_in_the_query_string_narrows_nothing(self):
         self.assertEqual(len(self._names()), 3)
-        self.assertEqual(len(self._names(day="", faith="", age="")), 3)
+        self.assertEqual(len(self._names(day="", faith="", grade="")), 3)
 
     def test_the_filters_are_shown_back_so_somebody_can_see_what_is_applied(self):
         response = self.client.get(reverse("directory:program_list"), {"day": "thu", "online": "1"})
@@ -2924,7 +2928,7 @@ class ListingSidebarTests(TestCase):
                 self.assertEqual("checked" in tag, ticked)
 
     def test_a_filter_that_was_ignored_gets_no_chip(self):
-        self.assertEqual(self._chips(age="abc", day="someday", faith="maybe"), {})
+        self.assertEqual(self._chips(grade="college", day="someday", faith="maybe"), {})
 
     def test_switching_category_keeps_the_other_filters(self):
         response = self.client.get(
@@ -2992,3 +2996,95 @@ class CategoryFoldTests(TestCase):
         response = self.client.get(reverse("directory:program_list"), {"faith": "faith"})
         self.assertNotContains(response, 'name="faith"')
         self.assertEqual(response.status_code, 200)
+
+
+class GradeLevelTests(TestCase):
+    """Grade levels: stored on the program, filtered on, and shown back."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.program = Program.objects.create(
+            name="Coastal Co-op",
+            slug="coastal",
+            short_description="A co-op.",
+            status=Program.Status.PUBLISHED,
+            grade_levels=["middle", "elementary"],  # stored in level order regardless
+        )
+
+    def test_levels_are_stored_in_order_and_read_as_a_family_would(self):
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.grade_levels, "elementary,middle")
+        self.assertEqual(self.program.grade_levels_display, "Elementary (K–5), Middle school (6–8)")
+
+    def test_the_program_page_shows_the_levels(self):
+        response = self.client.get(reverse("directory:program", kwargs={"slug": "coastal"}))
+        self.assertContains(response, "Elementary (K–5), Middle school (6–8)")
+
+    def test_each_ticked_level_gets_a_chip_and_a_ticked_box(self):
+        response = self.client.get(reverse("directory:program_list"), {"grade": ["high", "prek"]})
+        labels = [chip["label"] for chip in response.context["active_chips"]]
+        self.assertEqual(labels, ["Pre-K", "High school (9–12)"])
+        page = response.content.decode()
+        tag = page[page.index('name="grade" value="high"') :].split(">", 1)[0]
+        self.assertIn("checked", tag)
+
+    def test_no_code_is_a_substring_of_another(self):
+        """What keeps `grade_levels__contains` an exact test. See `CodeListField`."""
+        codes = [code for code, _ in GRADE_LEVELS]
+        for code in codes:
+            for other in codes:
+                if code != other:
+                    self.assertNotIn(code, other)
+
+
+class GradeLevelConversionTests(SimpleTestCase):
+    """The migration that turned free-text grades and ages into levels.
+
+    It runs once, on production data nobody has read line by line, so the rules
+    are worth pinning down — especially the edges where an age belongs to two
+    grades.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.m = importlib.import_module("directory.migrations.0015_grade_levels")
+
+    def _text(self, text):
+        return [level for level in self.m.LEVELS if level in self.m.levels_from_text(text)]
+
+    def _ages(self, youngest, oldest):
+        return [
+            level for level in self.m.LEVELS if level in self.m.levels_from_ages(youngest, oldest)
+        ]
+
+    def test_the_usual_ways_of_writing_grades(self):
+        for text, expected in [
+            ("K-5", ["elementary"]),
+            ("K–8", ["elementary", "middle"]),
+            ("grades 3-8", ["elementary", "middle"]),
+            ("grades 6-12", ["middle", "high"]),
+            ("high school only", ["high"]),
+            ("Pre-K through 2nd", ["prek", "elementary"]),
+            ("3rd–8th grade", ["elementary", "middle"]),
+            ("grade 7", ["middle"]),
+            ("middle and high school", ["middle", "high"]),
+            ("VPK", ["prek"]),
+            ("all ages", ["prek", "elementary", "middle", "high"]),
+        ]:
+            with self.subTest(text=text):
+                self.assertEqual(self._text(text), expected)
+
+    def test_text_that_is_not_grades_names_nothing(self):
+        for text in ["varies by class", "teens", "", None]:
+            with self.subTest(text=text):
+                self.assertEqual(self._text(text), [])
+
+    def test_ages_at_a_boundary_do_not_spill_into_the_next_level(self):
+        """An elementary program listed as ages 5–11 is not a middle school one."""
+        self.assertEqual(self._ages(5, 11), ["elementary"])
+        self.assertEqual(self._ages(5, 14), ["elementary", "middle"])
+        self.assertEqual(self._ages(11, 18), ["middle", "high"])
+        self.assertEqual(self._ages(14, 18), ["high"])
+        self.assertEqual(self._ages(3, 5), ["prek"])
+        self.assertEqual(self._ages(None, None), [])

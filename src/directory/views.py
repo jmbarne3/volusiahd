@@ -10,7 +10,16 @@ from django.views.decorators.http import require_GET
 from . import geocoding
 from .addresses import DEBOUNCE_MS, MIN_QUERY_CHARS, parse_coordinate
 from .forms import ProgramReferralForm, ProgramRegistrationForm
-from .models import WEEKDAY_NAMES, WEEKDAYS, Category, Page, Program, Tag
+from .models import (
+    GRADE_LEVEL_NAMES,
+    GRADE_LEVELS,
+    WEEKDAY_NAMES,
+    WEEKDAYS,
+    Category,
+    Page,
+    Program,
+    Tag,
+)
 
 # How long an answer to the same question is worth keeping. Addresses do not
 # move, and the second person to type "Ormond Beach" should cost nothing. An
@@ -151,7 +160,7 @@ def _narrow(request, programs):
         # so the chips and the checkboxes read back exactly what was applied.
         "days": [code for code, _ in WEEKDAYS if code in request.GET.getlist("day")],
         "faith": request.GET.get("faith", "").strip(),
-        "age": request.GET.get("age", "").strip(),
+        "grades": [code for code, _ in GRADE_LEVELS if code in request.GET.getlist("grade")],
         "online": request.GET.get("online") == "1",
         "directpay": request.GET.get("directpay") == "1",
         "tags": [slug.strip() for slug in request.GET.getlist("tag") if slug.strip()],
@@ -169,7 +178,7 @@ def _narrow(request, programs):
     programs = (
         programs.meeting_on(chosen["days"])
         .with_faith_basis(chosen["faith"])
-        .serving_age(chosen["age"])
+        .at_grade_levels(chosen["grades"])
         .tagged(chosen["tags"])
     )
     if chosen["online"]:
@@ -231,8 +240,8 @@ def _active_chips(request, chosen):
         )
     for day in chosen["days"]:
         chips.append((f"Meets {WEEKDAY_NAMES[day]}", _without(request, chosen, drop=("day", day))))
-    if chosen["age"].isdigit():
-        chips.append((f"Age {chosen['age']}", _without(request, chosen, "age")))
+    for level in chosen["grades"]:
+        chips.append((GRADE_LEVEL_NAMES[level], _without(request, chosen, drop=("grade", level))))
     if chosen["faith"] in Program.Faith.values:
         chips.append((Program.Faith(chosen["faith"]).label, _without(request, chosen, "faith")))
     if chosen["online"]:
@@ -263,7 +272,7 @@ def _listing_context(request, programs, **extra):
     keep.pop("category", None)
 
     filters_active = any(
-        chosen[key] for key in ["days", "faith", "age", "online", "directpay", "tags", "near"]
+        chosen[key] for key in ["days", "faith", "grades", "online", "directpay", "tags", "near"]
     )
     if point:
         empty_message = "Nothing in range. Try a wider distance."
@@ -283,6 +292,7 @@ def _listing_context(request, programs, **extra):
         "filters": chosen,
         "filters_active": filters_active,
         "weekdays": WEEKDAYS,
+        "grade_levels": GRADE_LEVELS,
         "distance_choices": DISTANCE_CHOICES,
         "your_location": YOUR_LOCATION,
         "address_min_chars": MIN_QUERY_CHARS,

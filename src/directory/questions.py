@@ -121,9 +121,7 @@ ASKED_BY = {
     # A parent support group serves the adults. Asking it what grades it takes is
     # the sort of question that makes a form feel like it was written for
     # somebody else.
-    "serves_grades": _all_but(PARENT_SUPPORT),
-    "age_min": _all_but(PARENT_SUPPORT),
-    "age_max": _all_but(PARENT_SUPPORT),
+    "grade_levels": _all_but(PARENT_SUPPORT),
     # Step Up pays for instruction. A park day and a parent coffee morning are
     # not instruction, and asking them to tick a scholarship box invites a wrong
     # answer we would then have to publish.
@@ -187,7 +185,7 @@ REQUIRED = frozenset(
         "short_description",
         "description",
         "locations",
-        "serves_grades",
+        "grade_levels",
         "submitter_name",
         "submitter_email",
         "is_authorized",

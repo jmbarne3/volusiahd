@@ -223,9 +223,7 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "delivery",
             "travels_to_student_home",
             "service_area",
-            "serves_grades",
-            "age_min",
-            "age_max",
+            "grade_levels",
             "meeting_days",
             "meeting_time_start",
             "meeting_time_end",
@@ -262,9 +260,7 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "delivery": "In person or online",
             "travels_to_student_home": "We travel to the student's home",
             "service_area": "How far you travel",
-            "serves_grades": "Grades served",
-            "age_min": "Youngest age",
-            "age_max": "Oldest age",
+            "grade_levels": "Grade levels you take",
             "meeting_days": "Days you meet",
             "meeting_time_start": "Starts at",
             "meeting_time_end": "Ends at",
@@ -301,8 +297,7 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "facebook": "The whole address, starting with https://.",
             "email": "Published on your page. Leave blank if you would rather not.",
             "service_area": "e.g. 'west Volusia only' or 'up to 30 miles'.",
-            "serves_grades": "Free text, e.g. 'K–8' or 'high school only'. "
-            "If it varies, say so — 'varies by class' is a useful answer too.",
+            "grade_levels": "Tick every level you take. Families filter by this.",
             "meeting_days": "Tick every day you normally meet. Families filter by this.",
             "meeting_time_start": "Leave blank if it varies.",
             "season_start": "The date your term or season starts. Leave blank if you run "
@@ -490,9 +485,6 @@ class ProgramRegistrationForm(BaseSubmissionForm):
 
         self._fold_in_answers(cleaned, category)
 
-        age_min, age_max = cleaned.get("age_min"), cleaned.get("age_max")
-        if age_min and age_max and age_min > age_max:
-            self.add_error("age_max", "The oldest age cannot be younger than the youngest age.")
         reachable = ["website", "facebook", "email", "phone"]
         if not any(cleaned.get(f) for f in reachable):
             raise forms.ValidationError(

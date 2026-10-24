@@ -199,7 +199,7 @@ class ProgramAdmin(ModelAdmin):
         (
             "Who it serves",
             {
-                "fields": ["serves_grades", ("age_min", "age_max")],
+                "fields": ["grade_levels"],
             },
         ),
         (
@@ -573,8 +573,7 @@ class SubmissionAdmin(ModelAdmin):
                     "class_names",
                     "instructor_info",
                     "faith_basis",
-                    "serves_grades",
-                    ("age_min", "age_max"),
+                    "grade_levels",
                 ]
             },
         ),

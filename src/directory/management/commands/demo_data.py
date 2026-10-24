@@ -185,8 +185,14 @@ SERVICE_AREAS = [
     "Up to 30 miles from Daytona Beach.",
     "The beachside, from Ormond to New Smyrna.",
 ]
-GRADES = ["K-5", "K-8", "grades 3-8", "grades 6-12", "high school only", "all ages"]
-AGES = [(5, 11), (5, 14), (8, 14), (11, 18), (14, 18), (None, None)]
+GRADE_PATTERN = [
+    "elementary",
+    "elementary,middle",
+    "middle,high",
+    "high",
+    "prek,elementary",
+    "",
+]
 
 
 class Command(BaseCommand):
@@ -264,9 +270,7 @@ class Command(BaseCommand):
                 "themselves. Background-checked and happy to talk before you enrol."
             ),
             "faith_basis": FAITH_PATTERN[index % len(FAITH_PATTERN)],
-            "serves_grades": GRADES[index % len(GRADES)],
-            "age_min": AGES[index % len(AGES)][0],
-            "age_max": AGES[index % len(AGES)][1],
+            "grade_levels": GRADE_PATTERN[index % len(GRADE_PATTERN)],
             "enrollment_opens": datetime.date(2026, 6, 1 + index),
             "enrollment_closes": datetime.date(2026, 8, 15 + index),
             "enrollment_notes": "Rolling after the start date, if there is room." if index else "",

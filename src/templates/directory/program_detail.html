@@ -65,8 +65,7 @@
       <dl class="facts">
         {% if program.when_display %}<dt>When it meets</dt><dd>{{ program.when_display }}</dd>{% endif %}
         {% if program.meeting_schedule %}<dt>Also</dt><dd>{{ program.meeting_schedule|linebreaksbr }}</dd>{% endif %}
-        {% if program.serves_grades %}<dt>Grades</dt><dd>{{ program.serves_grades }}</dd>{% endif %}
-        {% if program.age_range_display %}<dt>Ages</dt><dd>{{ program.age_range_display }}</dd>{% endif %}
+        {% if program.grade_levels_display %}<dt>Grades</dt><dd>{{ program.grade_levels_display }}</dd>{% endif %}
         {% if program.class_names %}<dt>Classes</dt><dd>{{ program.class_names }}</dd>{% endif %}
 
         {% for question, answers in program.answered_questions %}
