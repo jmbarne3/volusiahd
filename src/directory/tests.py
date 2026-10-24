@@ -30,6 +30,7 @@ from django.core.management import call_command
 from django.db.models import ProtectedError
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
+from django.utils.html import escapejs
 from PIL import Image
 
 from . import geocoding
@@ -3415,3 +3416,41 @@ class RegistrationExampleTextTests(TestCase):
                 hint = str(ProgramRegistrationForm().fields[name].help_text)
                 self.assertNotIn("they", hint.split())
                 self.assertFalse(hint.startswith("Their"))
+
+
+class GoogleAnalyticsTests(TestCase):
+    TAG = "googletagmanager.com/gtag/js"
+
+    def test_no_id_means_no_tag(self):
+        response = self.client.get(reverse("directory:home"))
+        self.assertNotContains(response, self.TAG)
+
+    @override_settings(GOOGLE_ANALYTICS_ID="G-TEST12345")
+    def test_an_id_adds_the_tag_to_public_pages(self):
+        response = self.client.get(reverse("directory:home"))
+        self.assertContains(response, f"{self.TAG}?id=G-TEST12345")
+        # Escaped for a JavaScript string, which JavaScript reads back as written.
+        self.assertContains(response, f'gtag("config", "{escapejs("G-TEST12345")}"')
+
+    @override_settings(GOOGLE_ANALYTICS_ID="G-TEST12345")
+    def test_the_reported_address_leaves_out_the_coordinates(self):
+        response = self.client.get(reverse("directory:program_list"))
+        self.assertContains(response, 'searchParams.delete("lat")')
+        self.assertContains(response, 'searchParams.delete("lng")')
+        self.assertContains(response, "page_location")
+
+    @override_settings(GOOGLE_ANALYTICS_ID="G-TEST12345")
+    def test_the_admin_never_loads_it(self):
+        response = self.client.get(reverse("admin:login"))
+        self.assertNotContains(response, self.TAG)
+
+    def test_a_misshapen_id_is_a_warning_not_a_tag(self):
+        from .checks import google_analytics_id
+
+        with override_settings(GOOGLE_ANALYTICS_ID_RAW="UA-12345-1", GOOGLE_ANALYTICS_ID=""):
+            warnings = google_analytics_id(None)
+        self.assertEqual([w.id for w in warnings], ["directory.W001"])
+        with override_settings(
+            GOOGLE_ANALYTICS_ID_RAW="G-TEST12345", GOOGLE_ANALYTICS_ID="G-TEST12345"
+        ):
+            self.assertEqual(google_analytics_id(None), [])

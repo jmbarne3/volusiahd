@@ -23,7 +23,27 @@ these tags matter more than they usually would.{% endcomment %}
 <meta name="twitter:card" content="summary">
 
 <link rel="canonical" href="{{ site_base_url }}{{ request.path }}">
-{% comment %}The only JavaScript on the site. It is inline and in <head> on
+{% if google_analytics_id %}
+{% comment %}Google Analytics, only when GOOGLE_ANALYTICS_ID is set. The page
+address it reports has `lat` and `lng` taken out: a location search carries a
+family's position, rounded to about a kilometre, and that is ours to use for
+the search and not something to hand to Google. Everything else in the query
+string — search words, filters — stays, because it is what makes the reports
+useful. The admin has its own templates and never loads this.{% endcomment %}
+<script async src="https://www.googletagmanager.com/gtag/js?id={{ google_analytics_id }}"></script>
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag() { dataLayer.push(arguments); }
+gtag("js", new Date());
+(function () {
+  var location = new URL(window.location.href);
+  location.searchParams.delete("lat");
+  location.searchParams.delete("lng");
+  gtag("config", "{{ google_analytics_id|escapejs }}", { page_location: location.toString() });
+})();
+</script>
+{% endif %}
+{% comment %}The theme script. It is inline and in <head> on
 purpose: a stored theme has to be applied before the first paint, and a
 deferred or external script would let the page render in the system theme and
 then visibly correct itself. Everything else it does — revealing the control

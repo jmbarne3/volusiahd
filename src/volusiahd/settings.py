@@ -6,6 +6,7 @@ from `fly.toml` [env] and `fly secrets`, and .dockerignore keeps .env out of the
 image. See docs/hosting-setup.md.
 """
 
+import re
 import sys
 from pathlib import Path
 
@@ -168,6 +169,16 @@ GEOCODER_BIAS = (29.05, -81.2)
 
 SITE_NAME = env("SITE_NAME", default="Volusia Homeschool Directory")
 SITE_BASE_URL = env("SITE_BASE_URL", default="http://localhost:8000")
+
+# Google Analytics 4. The measurement ID ("G-XXXXXXXXXX") is public — it is in
+# the page source of every site that uses it — so it lives in fly.toml [env]
+# rather than in `fly secrets`. Empty means no tag: local development and the
+# tests never talk to Google. Anything that is not shaped like an ID is dropped,
+# and `manage.py check` says so, rather than writing a typo into every page.
+GOOGLE_ANALYTICS_ID_RAW = env("GOOGLE_ANALYTICS_ID", default="").strip()
+GOOGLE_ANALYTICS_ID = (
+    GOOGLE_ANALYTICS_ID_RAW if re.fullmatch(r"G-[A-Z0-9]{4,20}", GOOGLE_ANALYTICS_ID_RAW) else ""
+)
 
 # --- Security ---------------------------------------------------------------
 # Fly's proxy terminates TLS and sets X-Forwarded-Proto.
