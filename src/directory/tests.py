@@ -35,6 +35,7 @@ from . import questions as q
 from .addresses import DEBOUNCE_MS, MIN_QUERY_CHARS, LocationsField
 from .models import (
     GRADE_LEVELS,
+    GRADE_SEARCH_TERMS,
     WEEKDAY_NAMES,
     Category,
     ContactPerson,
@@ -3088,3 +3089,70 @@ class GradeLevelConversionTests(SimpleTestCase):
         self.assertEqual(self._ages(14, 18), ["high"])
         self.assertEqual(self._ages(3, 5), ["prek"])
         self.assertEqual(self._ages(None, None), [])
+
+
+class GradeTermSearchTests(TestCase):
+    """Searching with a grade word finds programs by the levels they ticked."""
+
+    @classmethod
+    def setUpTestData(cls):
+        def program(name, levels, description="We meet weekly."):
+            return Program.objects.create(
+                name=name,
+                slug=name.lower().replace(" ", "-"),
+                short_description=description,
+                status=Program.Status.PUBLISHED,
+                grade_levels=levels,
+            )
+
+        program("Little Sprouts", "prek")
+        program("Brick Builders", "elementary")
+        program("Junior Debate", "middle")
+        program("Varsity Rowing", "high")
+        program("Unsure Club", "")
+        program("Says It Club", "", description="Open to elementary students.")
+        program("Soccer Stars", "elementary", description="Soccer for younger players.")
+
+    def _found(self, query):
+        response = self.client.get(reverse("directory:program_list"), {"q": query})
+        return sorted(program.name for program in response.context["programs"])
+
+    def test_a_grade_word_finds_programs_that_never_wrote_it(self):
+        self.assertIn("Brick Builders", self._found("elementary"))
+        self.assertEqual(self._found("preschool"), ["Little Sprouts"])
+        self.assertEqual(self._found("pre-k"), ["Little Sprouts"])
+        self.assertEqual(self._found("pre k"), ["Little Sprouts"])
+
+    def test_the_text_still_counts(self):
+        """A program with no levels that says "elementary" is still found by it."""
+        self.assertIn("Says It Club", self._found("elementary"))
+
+    def test_a_program_with_no_levels_is_not_found_by_a_grade_word(self):
+        for term in ["elementary", "teens", "middle school", "preschool"]:
+            with self.subTest(term=term):
+                self.assertNotIn("Unsure Club", self._found(term))
+
+    def test_two_word_terms_are_read_as_one(self):
+        self.assertEqual(self._found("high school"), ["Varsity Rowing"])
+        self.assertEqual(self._found("middle school"), ["Junior Debate"])
+
+    def test_high_on_its_own_is_an_ordinary_word(self):
+        """ "High" alone is in "highlights" and "high-energy", so it means nothing
+        about grades. Varsity Rowing never wrote it."""
+        self.assertNotIn("Varsity Rowing", self._found("high"))
+
+    def test_tweens_and_teens_straddle_two_levels(self):
+        self.assertEqual(self._found("tweens"), ["Brick Builders", "Junior Debate", "Soccer Stars"])
+        self.assertEqual(self._found("teens"), ["Junior Debate", "Varsity Rowing"])
+
+    def test_the_other_words_still_have_to_match(self):
+        self.assertEqual(self._found("elementary soccer"), ["Soccer Stars"])
+        self.assertEqual(self._found("the elementary classes"), self._found("elementary"))
+
+    def test_every_term_points_at_real_levels(self):
+        codes = {code for code, _ in GRADE_LEVELS}
+        for term, levels in GRADE_SEARCH_TERMS.items():
+            with self.subTest(term=term):
+                self.assertTrue(levels)
+                self.assertLessEqual(set(levels), codes)
+                self.assertLessEqual(len(term.split()), 2)

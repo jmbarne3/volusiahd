@@ -75,6 +75,38 @@ GRADE_LEVELS = [
 ]
 GRADE_LEVEL_NAMES = dict(GRADE_LEVELS)
 
+# Words families search with, and the grade levels each one means. A search for
+# "elementary" finds a program that ticked Elementary even if it never wrote the
+# word. Tweens and teens are not levels of their own: they straddle the line
+# between two, so they mean both.
+#
+# Two-word entries are recognised before a search is split into words. "High"
+# on its own is deliberately absent — it is in "highlights" and "high-energy" —
+# so only "high school" means high school.
+GRADE_SEARCH_TERMS = {
+    "preschool": ["prek"],
+    "pre-school": ["prek"],
+    "preschooler": ["prek"],
+    "preschoolers": ["prek"],
+    "pre-k": ["prek"],
+    "prek": ["prek"],
+    "pre k": ["prek"],
+    "vpk": ["prek"],
+    "kindergarten": ["elementary"],
+    "elementary": ["elementary"],
+    "middle": ["middle"],
+    "middle school": ["middle"],
+    "middleschool": ["middle"],
+    "high school": ["high"],
+    "highschool": ["high"],
+    "tween": ["elementary", "middle"],
+    "tweens": ["elementary", "middle"],
+    "teen": ["middle", "high"],
+    "teens": ["middle", "high"],
+    "teenager": ["middle", "high"],
+    "teenagers": ["middle", "high"],
+}
+
 
 def split_codes(value, choices):
     """Whatever a code-list value holds, as an ordered list of valid codes.

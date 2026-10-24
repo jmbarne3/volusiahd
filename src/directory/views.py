@@ -13,6 +13,7 @@ from .forms import ProgramReferralForm, ProgramRegistrationForm
 from .models import (
     GRADE_LEVEL_NAMES,
     GRADE_LEVELS,
+    GRADE_SEARCH_TERMS,
     WEEKDAY_NAMES,
     WEEKDAYS,
     Category,
@@ -57,15 +58,34 @@ def _search_words(query):
     """The words in a search worth matching on.
 
     Hyphens and apostrophes stay inside a word, so "pre-k" and "K-8" survive.
+    Two-word grade terms are kept together — "high school" is one term, not
+    "high" and "school" — because "high" alone means something else entirely.
     A search made only of filler ("the classes") keeps its words rather than
     quietly becoming no search at all.
     """
-    words = re.findall(r"[\w'-]+", query.lower())
+    tokens = re.findall(r"[\w'-]+", query.lower())
+    words, index = [], 0
+    while index < len(tokens):
+        pair = " ".join(tokens[index : index + 2])
+        if pair in GRADE_SEARCH_TERMS:
+            words.append(pair)
+            index += 2
+        else:
+            words.append(tokens[index])
+            index += 1
     return [w for w in words if w not in SEARCH_FILLER_WORDS] or words
 
 
 def _matches_word(word):
-    return (
+    """Everywhere one search word can turn up — and, for a grade term, the levels
+    it means. A program with no levels ticked is not matched by a grade term:
+    the sidebar shows those under every level so they are never hidden, but a
+    search for "teens" should return programs that said they take teens."""
+    levels = GRADE_SEARCH_TERMS.get(word, [])
+    by_level = Q()
+    for level in levels:
+        by_level |= Q(grade_levels__contains=level)
+    return by_level | (
         Q(name__icontains=word)
         | Q(host_name__icontains=word)
         | Q(short_description__icontains=word)
