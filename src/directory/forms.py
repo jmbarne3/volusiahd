@@ -21,6 +21,17 @@ from .models import Category, Submission, SubmissionLocation, Tag, TagGroup
 # Bots fill every field they find; people never see this one.
 HONEYPOT_FIELD = "website_url"
 
+# Answers to a tag question that contradict each other, by tag slug, with what to
+# tell the person who ticked both. Most answers combine freely; these are the
+# exceptions. The tags themselves come from `seed_taxonomy`.
+INCOMPATIBLE_ANSWERS = [
+    (
+        "drop-off",
+        "parents-remain-on-site",
+        "Choose either “Drop-off” or “Parents remain on site” — a program can’t be both.",
+    ),
+]
+
 
 class ScopedChoices:
     """Marks each option with the headings it is offered under, as slugs.
@@ -484,6 +495,7 @@ class ProgramRegistrationForm(BaseSubmissionForm):
                     )
 
         self._fold_in_answers(cleaned, category)
+        self._refuse_contradictions(cleaned)
 
         reachable = ["website", "facebook", "email", "phone"]
         if not any(cleaned.get(f) for f in reachable):
@@ -541,6 +553,19 @@ class ProgramRegistrationForm(BaseSubmissionForm):
                     seen.add(tag.pk)
                     chosen.append(tag)
         cleaned["tags"] = chosen
+
+    def _refuse_contradictions(self, cleaned):
+        """Send back answers that cannot both be true. See `INCOMPATIBLE_ANSWERS`.
+
+        The error goes on the question the answers came from, so it shows beside
+        the boxes that need changing rather than at the top of a long form.
+        """
+        chosen = {tag.slug: tag for tag in cleaned.get("tags") or []}
+        for first, second, message in INCOMPATIBLE_ANSWERS:
+            if first in chosen and second in chosen:
+                group = chosen[first].group
+                field = self.question_field_name(group) if group else "tags"
+                self.add_error(field if field in self.fields else None, message)
 
     def _blank_for(self, name):
         """The empty value for a field, as its column would understand it."""

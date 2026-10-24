@@ -18,6 +18,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 
+from django.apps import apps as django_apps
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.staticfiles import finders
@@ -2564,7 +2565,7 @@ class DeployCommandTests(TestCase):
 
         self.assertEqual(set(Category.objects.values_list("slug", flat=True)), set(q.EVERY))
         self.assertEqual(TagGroup.objects.count(), 4)
-        self.assertEqual(Tag.objects.count(), 30)
+        self.assertEqual(Tag.objects.count(), 28)
         # Every question has answers offered to at least one heading, or it is a
         # question the registration form will never show.
         for group in TagGroup.objects.all():
@@ -3286,3 +3287,88 @@ class StepUpScholarshipTests(TestCase):
 
     def test_not_being_a_provider_needs_no_scholarship(self):
         self._program().full_clean()
+
+
+class ParentInvolvementTests(TestCase):
+    """The parent involvement question: several answers, one pair refused (#10)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        call_command("loaddata", "taxonomy", verbosity=0)
+        cls.co_ops = Category.objects.get(slug=q.CO_OPS)
+        cls.sports = Category.objects.get(slug=q.SPORTS)
+        cls.group = TagGroup.objects.get(slug="parent-involvement")
+
+    def _answers(self, category):
+        return sorted(category.tags.filter(group=self.group).values_list("slug", flat=True))
+
+    def _payload(self, category, *answers):
+        tags = {tag.slug: tag.pk for tag in Tag.objects.filter(slug__in=answers)}
+        return {
+            "program_name": "Coastal Club",
+            "short_description": "A club.",
+            "description": "We meet weekly.",
+            "category": str(category.pk),
+            "email": "hello@coastal.example.org",
+            "locations": "12 Ocean Ave, Ormond Beach 32176",
+            "grade_levels": ["elementary"],
+            "question_parent_involvement": [str(tags[slug]) for slug in answers],
+            "submitter_name": "Dana Reed",
+            "submitter_email": "dana@coastal.example.org",
+            "is_authorized": "on",
+            "website_url": "",
+        }
+
+    def test_the_question_takes_several_answers(self):
+        self.assertTrue(self.group.allows_several)
+
+    def test_classes_and_co_ops_are_offered_their_own_answers(self):
+        self.assertEqual(
+            self._answers(self.sports),
+            [
+                "drop-off",
+                "parents-help-or-teach",
+                "parents-remain-on-site",
+                "parents-welcome-to-stay",
+            ],
+        )
+        self.assertEqual(
+            self._answers(self.co_ops),
+            ["parents-help-or-teach", "parents-remain-on-site", "part-of-the-day"],
+        )
+
+    def test_none_of_the_old_answers_survive(self):
+        old = ["drop-off-only", "families-stay-all-day", "parents-must-attend"]
+        self.assertFalse(Tag.objects.filter(slug__in=old).exists())
+
+    def test_answers_that_go_together_are_stored_together(self):
+        response = self.client.post(
+            reverse("directory:register"),
+            self._payload(self.sports, "drop-off", "parents-welcome-to-stay"),
+        )
+        self.assertRedirects(response, reverse("directory:register_thanks"))
+        stored = set(Submission.objects.get().tags.values_list("slug", flat=True))
+        self.assertEqual(stored, {"drop-off", "parents-welcome-to-stay"})
+
+    def test_drop_off_and_remaining_on_site_together_are_sent_back(self):
+        response = self.client.post(
+            reverse("directory:register"),
+            self._payload(self.sports, "drop-off", "parents-remain-on-site"),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Submission.objects.count(), 0)
+        self.assertContains(response, "a program can’t be both")
+        self.assertIn("question_parent_involvement", response.context["form"].errors)
+
+
+class RetireParentInvolvementMigrationTests(TestCase):
+    """Migration 0018 removes exactly the seven answers the new five replace."""
+
+    def test_it_removes_the_old_answers_and_nothing_else(self):
+        migration = importlib.import_module(
+            "directory.migrations.0018_retire_parent_involvement_tags"
+        )
+        for slug in [*migration.RETIRED, "drop-off", "lego"]:
+            Tag.objects.create(name=slug, slug=slug)
+        migration.retire(django_apps, None)
+        self.assertEqual(sorted(Tag.objects.values_list("slug", flat=True)), ["drop-off", "lego"])

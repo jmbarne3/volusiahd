@@ -11,7 +11,7 @@ Two steps today.
 **Migrate**, which is what used to be here on its own.
 
 **Load the baseline taxonomy** from `directory/fixtures/taxonomy.json` — the
-thirteen headings, the four tag questions and the thirty tags that are their
+thirteen headings, the four tag questions and the twenty-eight tags that are their
 answers. The point is that an empty database comes up usable rather than coming
 up as a site with no headings on the filter bar and a registration form that
 offers nothing. It is safe to repeat: `loaddata` inserts rows that are missing

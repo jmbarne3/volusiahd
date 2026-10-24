@@ -24,8 +24,8 @@
   "fields": {
     "name": "Parent involvement",
     "slug": "parent-involvement",
-    "prompt": "What is expected of the adult who brings them.",
-    "allows_several": false,
+    "prompt": "Tick everything that applies.",
+    "allows_several": true,
     "sort_order": 30
   }
 },
@@ -119,8 +119,8 @@
 {
   "model": "directory.tag",
   "fields": {
-    "name": "Parents must attend",
-    "slug": "parents-must-attend",
+    "name": "Drop-off",
+    "slug": "drop-off",
     "description": "",
     "group": [
       "parent-involvement"
@@ -130,8 +130,8 @@
 {
   "model": "directory.tag",
   "fields": {
-    "name": "Parents may attend",
-    "slug": "parents-may-attend",
+    "name": "Parents welcome to stay",
+    "slug": "parents-welcome-to-stay",
     "description": "",
     "group": [
       "parent-involvement"
@@ -141,8 +141,8 @@
 {
   "model": "directory.tag",
   "fields": {
-    "name": "Parents must help",
-    "slug": "parents-must-help",
+    "name": "Parents remain on site",
+    "slug": "parents-remain-on-site",
     "description": "",
     "group": [
       "parent-involvement"
@@ -152,8 +152,8 @@
 {
   "model": "directory.tag",
   "fields": {
-    "name": "Drop-off allowed",
-    "slug": "drop-off-allowed",
+    "name": "Parents help or teach",
+    "slug": "parents-help-or-teach",
     "description": "",
     "group": [
       "parent-involvement"
@@ -163,30 +163,8 @@
 {
   "model": "directory.tag",
   "fields": {
-    "name": "Drop-off only",
-    "slug": "drop-off-only",
-    "description": "",
-    "group": [
-      "parent-involvement"
-    ]
-  }
-},
-{
-  "model": "directory.tag",
-  "fields": {
-    "name": "Families stay all day",
-    "slug": "families-stay-all-day",
-    "description": "",
-    "group": [
-      "parent-involvement"
-    ]
-  }
-},
-{
-  "model": "directory.tag",
-  "fields": {
-    "name": "Families stay part of the day",
-    "slug": "families-stay-part-of-the-day",
+    "name": "Part of the day",
+    "slug": "part-of-the-day",
     "description": "",
     "group": [
       "parent-involvement"
@@ -351,10 +329,13 @@
     "icon": "groups",
     "tags": [
       [
-        "families-stay-all-day"
+        "parents-help-or-teach"
       ],
       [
-        "families-stay-part-of-the-day"
+        "parents-remain-on-site"
+      ],
+      [
+        "part-of-the-day"
       ]
     ]
   }
@@ -369,19 +350,16 @@
     "icon": "school",
     "tags": [
       [
-        "drop-off-allowed"
+        "drop-off"
       ],
       [
-        "drop-off-only"
+        "parents-help-or-teach"
       ],
       [
-        "parents-may-attend"
+        "parents-remain-on-site"
       ],
       [
-        "parents-must-attend"
-      ],
-      [
-        "parents-must-help"
+        "parents-welcome-to-stay"
       ]
     ]
   }
@@ -432,10 +410,7 @@
         "business-and-professional-development"
       ],
       [
-        "drop-off-allowed"
-      ],
-      [
-        "drop-off-only"
+        "drop-off"
       ],
       [
         "foreign-language"
@@ -453,13 +428,13 @@
         "nature-and-outdoor-skills"
       ],
       [
-        "parents-may-attend"
+        "parents-help-or-teach"
       ],
       [
-        "parents-must-attend"
+        "parents-remain-on-site"
       ],
       [
-        "parents-must-help"
+        "parents-welcome-to-stay"
       ],
       [
         "stem"
@@ -492,10 +467,7 @@
         "competition-team"
       ],
       [
-        "drop-off-allowed"
-      ],
-      [
-        "drop-off-only"
+        "drop-off"
       ],
       [
         "intermediate"
@@ -504,13 +476,13 @@
         "junior-varsity"
       ],
       [
-        "parents-may-attend"
+        "parents-help-or-teach"
       ],
       [
-        "parents-must-attend"
+        "parents-remain-on-site"
       ],
       [
-        "parents-must-help"
+        "parents-welcome-to-stay"
       ],
       [
         "skill-based-or-recreational"
@@ -540,10 +512,7 @@
         "dance"
       ],
       [
-        "drop-off-allowed"
-      ],
-      [
-        "drop-off-only"
+        "drop-off"
       ],
       [
         "intermediate"
@@ -552,13 +521,13 @@
         "music-lessons"
       ],
       [
-        "parents-may-attend"
+        "parents-help-or-teach"
       ],
       [
-        "parents-must-attend"
+        "parents-remain-on-site"
       ],
       [
-        "parents-must-help"
+        "parents-welcome-to-stay"
       ],
       [
         "theater"
@@ -582,22 +551,19 @@
         "beginner"
       ],
       [
-        "drop-off-allowed"
-      ],
-      [
-        "drop-off-only"
+        "drop-off"
       ],
       [
         "intermediate"
       ],
       [
-        "parents-may-attend"
+        "parents-help-or-teach"
       ],
       [
-        "parents-must-attend"
+        "parents-remain-on-site"
       ],
       [
-        "parents-must-help"
+        "parents-welcome-to-stay"
       ]
     ]
   }

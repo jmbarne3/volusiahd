@@ -101,6 +101,10 @@ HEADINGS = [
 # question and not a column. Sports asks about ability and means junior varsity;
 # an art studio asks about ability and means advanced. Same question, same filter,
 # different answers on offer.
+# The headings that are classes and teams: somebody teaches, and a parent may
+# or may not stay.
+_CLASSES = [q.CORE_ACADEMICS, q.SPORTS, q.ARTS_AND_CRAFTS, q.PERFORMING_ARTS, q.ENRICHMENT]
+
 QUESTIONS = [
     {
         "slug": "ability-level",
@@ -128,39 +132,28 @@ QUESTIONS = [
         ],
     },
     {
-        # One answer only. These are alternatives, and a program that ticked
-        # "drop-off only" and "parents must attend" would have told a family
-        # nothing at all.
+        # Several answers, each a plain statement that can sit beside the others.
+        # The old list mixed three questions — can I leave my child, what is
+        # expected of me, for how long — and words like "only" and "must" that
+        # each claimed to be the whole answer, so it had to be one choice. Here
+        # "only" is what is left unticked: just "Drop-off" means drop-off only.
+        #
+        # One pair still contradicts itself, "Drop-off" and "Parents remain on
+        # site", and the registration form refuses it. See `INCOMPATIBLE_ANSWERS`
+        # in forms.py.
         "slug": "parent-involvement",
         "name": "Parent involvement",
-        "allows_several": False,
+        "allows_several": True,
         "sort_order": 30,
-        "prompt": "What is expected of the adult who brings them.",
+        "prompt": "Tick everything that applies.",
         "answers": [
-            (
-                "Parents must attend",
-                [q.CORE_ACADEMICS, q.SPORTS, q.ARTS_AND_CRAFTS, q.PERFORMING_ARTS, q.ENRICHMENT],
-            ),
-            (
-                "Parents may attend",
-                [q.CORE_ACADEMICS, q.SPORTS, q.ARTS_AND_CRAFTS, q.PERFORMING_ARTS, q.ENRICHMENT],
-            ),
-            (
-                "Parents must help",
-                [q.CORE_ACADEMICS, q.SPORTS, q.ARTS_AND_CRAFTS, q.PERFORMING_ARTS, q.ENRICHMENT],
-            ),
-            (
-                "Drop-off allowed",
-                [q.CORE_ACADEMICS, q.SPORTS, q.ARTS_AND_CRAFTS, q.PERFORMING_ARTS, q.ENRICHMENT],
-            ),
-            (
-                "Drop-off only",
-                [q.CORE_ACADEMICS, q.SPORTS, q.ARTS_AND_CRAFTS, q.PERFORMING_ARTS, q.ENRICHMENT],
-            ),
-            # A co-op's version of the question. Parents are involved by
-            # definition, so what is left to ask is for how much of the day.
-            ("Families stay all day", [q.CO_OPS]),
-            ("Families stay part of the day", [q.CO_OPS]),
+            ("Drop-off", _CLASSES),
+            ("Parents welcome to stay", _CLASSES),
+            ("Parents remain on site", [*_CLASSES, q.CO_OPS]),
+            ("Parents help or teach", [*_CLASSES, q.CO_OPS]),
+            # A co-op's question only: parents are there by definition, so what
+            # is left to ask is whether a family can come for part of the day.
+            ("Part of the day", [q.CO_OPS]),
         ],
     },
     {

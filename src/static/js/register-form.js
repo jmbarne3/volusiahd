@@ -105,7 +105,12 @@
 
       answers.forEach(function (input) {
         var option = input.closest("label") || input;
-        var shown = offeredTo(input, slug);
+        // By the answer's own headings, not the question's. Each input carries
+        // both, and `offeredTo` reads `data-asked-by` first — which would show
+        // every answer wherever the question is asked, Varsity under Enrichment
+        // included (#9).
+        var categories = input.getAttribute("data-categories") || "";
+        var shown = slug === "" || categories.split(" ").indexOf(slug) !== -1;
         option.hidden = !shown;
         if (!shown) input.checked = false;
       });
