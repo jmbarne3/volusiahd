@@ -29,7 +29,13 @@ last belong in the fixture, which is written by:
     DATABASE_PATH=/tmp/fresh.sqlite3 python manage.py seed_taxonomy
     DATABASE_PATH=/tmp/fresh.sqlite3 python manage.py dumpdata \\
         directory.TagGroup directory.Tag directory.Category \\
+        --natural-foreign --natural-primary \\
         --indent 2 -o src/directory/fixtures/taxonomy.json
+
+**Both natural-key flags are required.** Without them the fixture is keyed by
+row id, and loading it over production would overwrite whichever rows happen to
+hold those ids rather than the rows with those slugs. A test fails if they are
+left off.
 
 `seed_taxonomy` is where the vocabulary is actually written and commented; the
 fixture is generated from it. A test loads the fixture and seeds a database from

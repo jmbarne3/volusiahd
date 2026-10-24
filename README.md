@@ -15,8 +15,7 @@ Requires [uv](https://docs.astral.sh/uv/) and Python 3.12.
 ```bash
 uv sync                                  # create .venv and install dependencies
 cp .env.example .env                     # then set SECRET_KEY
-uv run python manage.py migrate
-uv run python manage.py seed_categories  # the nine starting categories
+uv run python manage.py deploy           # migrate, then load the categories and tags
 uv run python manage.py createsuperuser
 uv run python manage.py runserver
 ```

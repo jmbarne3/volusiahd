@@ -32,7 +32,13 @@ from directory.models import Category, Tag, TagGroup
 # The order is editorial: what most families are looking for, first.
 HEADINGS = [
     (q.CO_OPS, "Co-ops", 10, "groups", "Parents take part unless a listing says otherwise."),
-    (q.CORE_ACADEMICS, "Core academic classes", 20, "school", "Math, science, writing, history."),
+    (
+        q.CORE_ACADEMICS,
+        "Core academic classes",
+        20,
+        "school",
+        "Math, Language Arts, Science, History.",
+    ),
     (
         q.MICROSCHOOLS,
         "Microschools and hybrid programs",

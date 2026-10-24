@@ -364,7 +364,7 @@
   "fields": {
     "name": "Core academic classes",
     "slug": "core-academics",
-    "description": "Math, science, writing, history.",
+    "description": "Math, Language Arts, Science, History.",
     "sort_order": 20,
     "icon": "school",
     "tags": [
