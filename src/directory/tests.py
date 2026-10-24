@@ -2907,7 +2907,7 @@ class ListingSidebarTests(TestCase):
 
     def test_each_applied_filter_gets_a_chip_that_removes_only_itself(self):
         chips = self._chips(day="sat", online="1", tag=["varsity"])
-        self.assertEqual(set(chips), {"Meets Saturday", "Online available", "Varsity"})
+        self.assertEqual(set(chips), {"Meets Saturday", "Virtual options available", "Varsity"})
         self.assertNotIn("day=", chips["Meets Saturday"])
         self.assertIn("online=1", chips["Meets Saturday"])
         self.assertIn("tag=varsity", chips["Meets Saturday"])
@@ -3156,3 +3156,75 @@ class GradeTermSearchTests(TestCase):
                 self.assertTrue(levels)
                 self.assertLessEqual(set(levels), codes)
                 self.assertLessEqual(len(term.split()), 2)
+
+
+class VirtualOptionsFilterTests(TestCase):
+    """The "Virtual options available" filter, offered only where it means something."""
+
+    OFFERED = [
+        q.CORE_ACADEMICS,
+        q.TESTING,
+        q.SPECIAL_NEEDS,
+        q.TUTORING,
+        q.PARENT_SUPPORT,
+        q.ENRICHMENT,
+    ]
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.categories = {
+            slug: Category.objects.create(name=slug.title(), slug=slug) for slug in q.EVERY
+        }
+        cls.tag = Tag.objects.create(name="Lego", slug="lego")
+        for slug, delivery in [
+            (q.TUTORING, Program.Delivery.ONLINE),
+            (q.TUTORING, Program.Delivery.IN_PERSON),
+            (q.CO_OPS, Program.Delivery.HYBRID),
+        ]:
+            Program.objects.create(
+                name=f"{slug} {delivery}",
+                slug=f"{slug}-{delivery}",
+                short_description="A program.",
+                status=Program.Status.PUBLISHED,
+                category=cls.categories[slug],
+                delivery=delivery,
+            )
+
+    def _page(self, url, **params):
+        return self.client.get(url, params)
+
+    def test_the_six_categories_and_the_all_programs_page_offer_it(self):
+        for slug in self.OFFERED:
+            with self.subTest(slug=slug):
+                response = self._page(self.categories[slug].get_absolute_url())
+                self.assertContains(response, "Virtual options available")
+        self.assertContains(
+            self._page(reverse("directory:program_list")), "Virtual options available"
+        )
+
+    def test_the_other_categories_and_tag_pages_do_not(self):
+        for slug in sorted(q.EVERY - set(self.OFFERED)):
+            with self.subTest(slug=slug):
+                response = self._page(self.categories[slug].get_absolute_url())
+                self.assertNotContains(response, 'name="online"')
+        self.assertNotContains(self._page(self.tag.get_absolute_url()), 'name="online"')
+
+    def test_the_question_is_asked_exactly_where_the_filter_is_offered(self):
+        """A filter on a heading that is never asked the question would always
+        come back empty."""
+        self.assertEqual(q.headings_asking("delivery"), frozenset(self.OFFERED))
+
+    def test_it_still_filters_where_it_is_offered(self):
+        response = self._page(self.categories[q.TUTORING].get_absolute_url(), online="1")
+        names = [program.name for program in response.context["programs"]]
+        self.assertEqual(names, [f"{q.TUTORING} online"])
+
+    def test_an_old_link_cannot_filter_by_a_control_the_page_does_not_show(self):
+        response = self._page(self.categories[q.CO_OPS].get_absolute_url(), online="1")
+        self.assertFalse(response.context["filters"]["online"])
+        self.assertEqual(response.context["active_chips"], [])
+        self.assertEqual(len(response.context["programs"]), 1)
+
+    def test_the_wording_says_virtual_everywhere(self):
+        self.assertEqual(Program.Delivery.ONLINE.label, "Virtual")
+        self.assertEqual(Program.Delivery.HYBRID.label, "In person or virtual")

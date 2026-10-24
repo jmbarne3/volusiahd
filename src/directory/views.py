@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET
 
 from . import geocoding
+from . import questions as q
 from .addresses import DEBOUNCE_MS, MIN_QUERY_CHARS, parse_coordinate
 from .forms import ProgramReferralForm, ProgramRegistrationForm
 from .models import (
@@ -166,7 +167,19 @@ def _chosen_place(request):
     return place
 
 
-def _narrow(request, programs):
+def _offers_virtual(active_category=None, active_tag=None, **_):
+    """Whether this listing offers the "Virtual options available" filter.
+
+    On the all-programs page, and on the category pages whose programs are asked
+    the question. Not on a tag page, which mixes headings, and not under a
+    heading where every answer would be "in person".
+    """
+    if active_tag:
+        return False
+    return active_category is None or active_category.slug in q.headings_asking("delivery")
+
+
+def _narrow(request, programs, *, offers_virtual=True):
     """Apply the search box and every filter the query string carries.
 
     Every filter is a no-op when handed nothing, so this runs unconditionally and
@@ -181,7 +194,9 @@ def _narrow(request, programs):
         "days": [code for code, _ in WEEKDAYS if code in request.GET.getlist("day")],
         "faith": request.GET.get("faith", "").strip(),
         "grades": [code for code, _ in GRADE_LEVELS if code in request.GET.getlist("grade")],
-        "online": request.GET.get("online") == "1",
+        # Ignored where the filter is not offered, so an old link carrying it
+        # cannot narrow a list by a control the page does not show.
+        "online": offers_virtual and request.GET.get("online") == "1",
         "directpay": request.GET.get("directpay") == "1",
         "tags": [slug.strip() for slug in request.GET.getlist("tag") if slug.strip()],
         **_chosen_place(request),
@@ -265,7 +280,7 @@ def _active_chips(request, chosen):
     if chosen["faith"] in Program.Faith.values:
         chips.append((Program.Faith(chosen["faith"]).label, _without(request, chosen, "faith")))
     if chosen["online"]:
-        chips.append(("Online available", _without(request, chosen, "online")))
+        chips.append(("Virtual options available", _without(request, chosen, "online")))
     if chosen["directpay"]:
         chips.append(("Step Up direct pay", _without(request, chosen, "directpay")))
     names = dict(Tag.objects.filter(slug__in=chosen["tags"]).values_list("slug", "name"))
@@ -276,7 +291,8 @@ def _active_chips(request, chosen):
 
 def _listing_context(request, programs, **extra):
     """Shared context for every page that renders the program listing."""
-    programs, chosen = _narrow(request, programs)
+    offers_virtual = _offers_virtual(**extra)
+    programs, chosen = _narrow(request, programs, offers_virtual=offers_virtual)
 
     # With a place chosen the listing splits in two. Programs in range, nearest
     # first; then the ones a distance cannot be measured to, which a family
@@ -311,6 +327,7 @@ def _listing_context(request, programs, **extra):
         "query": chosen["q"],
         "filters": chosen,
         "filters_active": filters_active,
+        "offers_virtual": offers_virtual,
         "weekdays": WEEKDAYS,
         "grade_levels": GRADE_LEVELS,
         "distance_choices": DISTANCE_CHOICES,

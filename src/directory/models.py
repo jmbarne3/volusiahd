@@ -544,8 +544,8 @@ class SharedProgramFields(models.Model):
 
     class Delivery(models.TextChoices):
         IN_PERSON = "in_person", "In person"
-        ONLINE = "online", "Online"
-        HYBRID = "hybrid", "In person or online"
+        ONLINE = "online", "Virtual"
+        HYBRID = "hybrid", "In person or virtual"
 
     # --- Who is behind it ---------------------------------------------------
 
@@ -689,7 +689,7 @@ class SharedProgramFields(models.Model):
     # --- Where, and how far -------------------------------------------------
 
     delivery = models.CharField(
-        "in person or online",
+        "in person or virtual",
         max_length=10,
         choices=Delivery.choices,
         blank=True,

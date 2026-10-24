@@ -122,7 +122,7 @@ so a phone shows programs first and filters on request.
       <fieldset class="filter-group">
         <legend class="filter-heading">Options</legend>
         <ul class="filter-options">
-          <li><label><input type="checkbox" name="online" value="1"{% if filters.online %} checked{% endif %}> Online available</label></li>
+          {% if offers_virtual %}<li><label><input type="checkbox" name="online" value="1"{% if filters.online %} checked{% endif %}> Virtual options available</label></li>{% endif %}
           <li><label><input type="checkbox" name="directpay" value="1"{% if filters.directpay %} checked{% endif %}> Step Up direct pay</label></li>
         </ul>
       </fieldset>
@@ -176,7 +176,7 @@ so a phone shows programs first and filters on request.
     {% if unplaced %}
       <section class="unplaced">
         <h2>No fixed location</h2>
-        <p class="lede">Online, at members' homes, coming to you, or an address we have not placed on the map yet.</p>
+        <p class="lede">Virtual, at members' homes, coming to you, or an address we have not placed on the map yet.</p>
         {% include "directory/_program_cards.html" with programs=unplaced empty_message="" %}
       </section>
     {% endif %}

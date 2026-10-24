@@ -257,7 +257,7 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "facebook": "Facebook page URL",
             "email": "Public email address",
             "phone": "Public phone number",
-            "delivery": "In person or online",
+            "delivery": "In person or virtual",
             "travels_to_student_home": "We travel to the student's home",
             "service_area": "How far you travel",
             "grade_levels": "Grade levels you take",

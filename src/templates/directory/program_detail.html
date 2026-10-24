@@ -77,7 +77,7 @@
         {% if program.cost_display %}<dt>Cost</dt><dd>{{ program.cost_display|linebreaksbr }}</dd>{% endif %}
         {% if program.step_up_display %}<dt>Step Up</dt><dd>{{ program.step_up_display }}</dd>{% endif %}
         {% if program.enrollment_display %}<dt>Enrolling</dt><dd>{{ program.enrollment_display }}</dd>{% endif %}
-        {% if program.delivery %}<dt>In person or online</dt><dd>{{ program.get_delivery_display }}</dd>{% endif %}
+        {% if program.delivery %}<dt>In person or virtual</dt><dd>{{ program.get_delivery_display }}</dd>{% endif %}
         {% if program.travels_to_student_home %}<dt>Travel</dt><dd>They come to you</dd>{% endif %}
         {% if program.service_area %}<dt>How far they go</dt><dd>{{ program.service_area }}</dd>{% endif %}
         {% if program.location_list %}<dt>Where</dt>{% for location in program.location_list %}<dd>{{ location }}</dd>{% endfor %}{% endif %}

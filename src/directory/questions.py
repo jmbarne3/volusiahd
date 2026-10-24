@@ -166,7 +166,12 @@ ASKED_BY = {
     "enrollment_notes": frozenset(
         {CO_OPS, CORE_ACADEMICS, SPORTS, ARTS_AND_CRAFTS, PERFORMING_ARTS, ENRICHMENT, MICROSCHOOLS}
     ),
-    "delivery": _COMES_TO_YOU,
+    # In person or virtual. Asked of the six headings where a virtual option is
+    # a real thing families look for — the three that come to you, plus classes,
+    # clubs and parent groups — and the same six are the only listings that
+    # offer the "Virtual options available" filter. Not of a co-op, a team or a
+    # park day, where the answer is always "in person".
+    "delivery": _COMES_TO_YOU | {CORE_ACADEMICS, ENRICHMENT, PARENT_SUPPORT},
     "travels_to_student_home": _COMES_TO_YOU,
     "service_area": _COMES_TO_YOU | {FIELD_TRIPS},
 }
