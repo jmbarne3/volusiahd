@@ -115,7 +115,9 @@ STORAGES = {
         "BACKEND": (
             "django.contrib.staticfiles.storage.StaticFilesStorage"
             if DEBUG
-            else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+            # WhiteNoise's hashing and compression, with our CSS minified
+            # first. See volusiahd/storage.py.
+            else "volusiahd.storage.MinifiedCompressedManifestStaticFilesStorage"
         )
     },
 }

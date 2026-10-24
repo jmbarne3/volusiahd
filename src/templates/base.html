@@ -24,22 +24,45 @@ these tags matter more than they usually would.{% endcomment %}
 
 <link rel="canonical" href="{{ site_base_url }}{{ request.path }}">
 {% if google_analytics_id %}
-{% comment %}Google Analytics, only when GOOGLE_ANALYTICS_ID is set. The page
-address it reports has `lat` and `lng` taken out: a location search carries a
-family's position, rounded to about a kilometre, and that is ours to use for
-the search and not something to hand to Google. Everything else in the query
-string — search words, filters — stays, because it is what makes the reports
-useful. The admin has its own templates and never loads this.{% endcomment %}
-<script async src="https://www.googletagmanager.com/gtag/js?id={{ google_analytics_id }}"></script>
+{% comment %}Google Analytics, only when GOOGLE_ANALYTICS_ID is set.
+
+The queue and the `config` call go in now, so the page view is recorded however
+long the script takes to arrive: gtag.js reads `dataLayer` when it loads. The
+script itself — about 180 KB compressed — is fetched only once the page has
+finished loading and the browser is idle, so it never competes with the page
+for bandwidth or the main thread (#15). The cost is that somebody who leaves
+before the page finishes loading is not counted. Waiting for a scroll or a click
+would score better still, and would miss everyone who reads one page and goes.
+
+The page address it reports has `lat` and `lng` taken out: a location search
+carries a family's position, rounded to about a kilometre, and that is ours to
+use for the search and not something to hand to Google. Everything else in the
+query string — search words, filters — stays, because it is what makes the
+reports useful. The admin has its own templates and never loads this.{% endcomment %}
 <script>
 window.dataLayer = window.dataLayer || [];
 function gtag() { dataLayer.push(arguments); }
 gtag("js", new Date());
 (function () {
+  var id = "{{ google_analytics_id|escapejs }}";
   var location = new URL(window.location.href);
   location.searchParams.delete("lat");
   location.searchParams.delete("lng");
-  gtag("config", "{{ google_analytics_id|escapejs }}", { page_location: location.toString() });
+  gtag("config", id, { page_location: location.toString() });
+
+  function load() {
+    var script = document.createElement("script");
+    script.async = true;
+    script.src = "https://www.googletagmanager.com/gtag/js?id=" + encodeURIComponent(id);
+    document.head.appendChild(script);
+  }
+  // Idle, but not indefinitely: a busy page still gets counted within 3s.
+  function whenIdle() {
+    if ("requestIdleCallback" in window) window.requestIdleCallback(load, { timeout: 3000 });
+    else window.setTimeout(load, 1500);
+  }
+  if (document.readyState === "complete") whenIdle();
+  else window.addEventListener("load", whenIdle, { once: true });
 })();
 </script>
 {% endif %}

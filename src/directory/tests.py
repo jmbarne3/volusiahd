@@ -14,6 +14,7 @@ import shutil
 import tempfile
 from contextlib import contextmanager
 from io import BytesIO, StringIO
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 from urllib.error import HTTPError, URLError
@@ -3428,9 +3429,19 @@ class GoogleAnalyticsTests(TestCase):
     @override_settings(GOOGLE_ANALYTICS_ID="G-TEST12345")
     def test_an_id_adds_the_tag_to_public_pages(self):
         response = self.client.get(reverse("directory:home"))
-        self.assertContains(response, f"{self.TAG}?id=G-TEST12345")
+        self.assertContains(response, self.TAG)
         # Escaped for a JavaScript string, which JavaScript reads back as written.
-        self.assertContains(response, f'gtag("config", "{escapejs("G-TEST12345")}"')
+        self.assertContains(response, f'var id = "{escapejs("G-TEST12345")}"')
+        self.assertContains(response, 'gtag("config", id')
+
+    @override_settings(GOOGLE_ANALYTICS_ID="G-TEST12345")
+    def test_the_script_waits_for_the_page_to_load(self):
+        """Not a <script src> in the head, which the browser would fetch while
+        the page is still loading (#15), but added once it has finished."""
+        page = self.client.get(reverse("directory:home")).content.decode()
+        self.assertNotIn(f'<script async src="https://www.{self.TAG}', page)
+        self.assertIn('addEventListener("load", whenIdle', page)
+        self.assertIn("requestIdleCallback", page)
 
     @override_settings(GOOGLE_ANALYTICS_ID="G-TEST12345")
     def test_the_reported_address_leaves_out_the_coordinates(self):
@@ -3454,3 +3465,52 @@ class GoogleAnalyticsTests(TestCase):
             GOOGLE_ANALYTICS_ID_RAW="G-TEST12345", GOOGLE_ANALYTICS_ID="G-TEST12345"
         ):
             self.assertEqual(google_analytics_id(None), [])
+
+
+class MinifiedStaticFilesTests(TestCase):
+    """Production's static storage minifies our CSS before hashing it (#16)."""
+
+    def test_our_css_is_minified_and_compressed_and_other_css_is_left_alone(self):
+        source = Path(tempfile.mkdtemp())
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, source)
+        self.addCleanup(shutil.rmtree, root)
+        (source / "css").mkdir()
+        # Enough rules that compressing is worth it: WhiteNoise skips writing a
+        # .gz or .br that would not be smaller than the file.
+        rules = "".join(
+            f"/* Why card {n} looks the way it does. */\n.card-{n} {{\n  color: red;\n}}\n"
+            for n in range(60)
+        )
+        (source / "css" / "ours.css").write_text(rules)
+        # Our folder only: collecting every installed app's files as well takes
+        # seconds and tests nothing more.
+        with override_settings(
+            STATICFILES_DIRS=[source],
+            STATICFILES_FINDERS=["django.contrib.staticfiles.finders.FileSystemFinder"],
+            STATIC_ROOT=root,
+            STORAGES={
+                **settings.STORAGES,
+                "staticfiles": {
+                    "BACKEND": "volusiahd.storage.MinifiedCompressedManifestStaticFilesStorage"
+                },
+            },
+        ):
+            call_command("collectstatic", interactive=False, verbosity=0)
+
+        manifest = json.loads((root / "staticfiles.json").read_text())["paths"]
+        served = root / manifest["css/ours.css"]
+        self.assertEqual(served.read_text(), "".join(f".card-{n}{{color:red}}" for n in range(60)))
+        self.assertTrue(served.with_name(served.name + ".gz").exists())
+        self.assertTrue(served.with_name(served.name + ".br").exists())
+
+    def test_only_files_from_our_own_folders_count_as_ours(self):
+        """The admin, Unfold and the prose editor ship their own CSS, which is
+        not ours to rewrite."""
+        from django.core.files.storage import FileSystemStorage
+
+        from volusiahd.storage import MinifiedCompressedManifestStaticFilesStorage as storage
+
+        admin = Path(django_apps.get_app_config("admin").path) / "static"
+        self.assertTrue(storage._is_ours(FileSystemStorage(settings.STATICFILES_DIRS[0])))
+        self.assertFalse(storage._is_ours(FileSystemStorage(admin)))
