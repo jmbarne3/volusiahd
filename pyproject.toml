@@ -1,6 +1,6 @@
 [project]
 name = "volusiahd"
-version = "0.3.0"
+version = "0.3.1"
 description = "Volusia County Homeschool Directory"
 readme = "README.md"
 requires-python = ">=3.12"
