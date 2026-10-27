@@ -163,17 +163,6 @@
 {
   "model": "directory.tag",
   "fields": {
-    "name": "Part of the day",
-    "slug": "part-of-the-day",
-    "description": "",
-    "group": [
-      "parent-involvement"
-    ]
-  }
-},
-{
-  "model": "directory.tag",
-  "fields": {
     "name": "Core subjects",
     "slug": "core-subjects",
     "description": "",
@@ -333,9 +322,6 @@
       ],
       [
         "parents-remain-on-site"
-      ],
-      [
-        "part-of-the-day"
       ]
     ]
   }

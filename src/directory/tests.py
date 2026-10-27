@@ -2567,7 +2567,7 @@ class DeployCommandTests(TestCase):
 
         self.assertEqual(set(Category.objects.values_list("slug", flat=True)), set(q.EVERY))
         self.assertEqual(TagGroup.objects.count(), 4)
-        self.assertEqual(Tag.objects.count(), 28)
+        self.assertEqual(Tag.objects.count(), 27)
         # Every question has answers offered to at least one heading, or it is a
         # question the registration form will never show.
         for group in TagGroup.objects.all():
@@ -3336,7 +3336,7 @@ class ParentInvolvementTests(TestCase):
         )
         self.assertEqual(
             self._answers(self.co_ops),
-            ["parents-help-or-teach", "parents-remain-on-site", "part-of-the-day"],
+            ["parents-help-or-teach", "parents-remain-on-site"],
         )
 
     def test_none_of_the_old_answers_survive(self):
@@ -3442,6 +3442,33 @@ class DescriptionWordingTests(SimpleTestCase):
         from .forms import ProgramRegistrationForm
 
         self.assertNotIn("highlights", ProgramRegistrationForm.base_fields)
+
+
+class RetirePartOfTheDayMigrationTests(TestCase):
+    """Migration 0020 removes "Part of the day" and nothing else (#19)."""
+
+    def test_it_removes_only_part_of_the_day(self):
+        migration = importlib.import_module("directory.migrations.0020_retire_part_of_the_day")
+        for slug in ["part-of-the-day", "parents-remain-on-site"]:
+            Tag.objects.get_or_create(slug=slug, defaults={"name": slug})
+        migration.retire(django_apps, None)
+        self.assertFalse(Tag.objects.filter(slug="part-of-the-day").exists())
+        self.assertTrue(Tag.objects.filter(slug="parents-remain-on-site").exists())
+
+
+class RegistrationIntroWordingTests(TestCase):
+    """The basics has no hint about the heading, and the Category hint has no
+    "also" (#22, #23)."""
+
+    def test_the_basics_has_no_hint_about_the_heading(self):
+        response = self.client.get(reverse("directory:register"))
+        self.assertNotContains(response, "Start with the heading")
+
+    def test_the_category_hint_drops_also(self):
+        from .forms import ProgramRegistrationForm
+
+        help_text = str(ProgramRegistrationForm.base_fields["category"].help_text)
+        self.assertTrue(help_text.startswith("The one heading that fits best. It decides "))
 
 
 class RegistrationExampleTextTests(TestCase):

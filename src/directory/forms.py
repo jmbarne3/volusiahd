@@ -125,7 +125,7 @@ class BaseSubmissionForm(forms.ModelForm):
         required=False,
         widget=CategorySelect,
         empty_label="Choose the closest one",
-        help_text="The one heading that fits best. It also decides which of the "
+        help_text="The one heading that fits best. It decides which of the "
         "questions below we bother you with.",
     )
 

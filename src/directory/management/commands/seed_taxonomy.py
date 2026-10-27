@@ -150,10 +150,9 @@ QUESTIONS = [
             ("Drop-off", _CLASSES),
             ("Parents welcome to stay", _CLASSES),
             ("Parents remain on site", [*_CLASSES, q.CO_OPS]),
+            # Co-ops get only these two: parents are there by definition. "Part of
+            # the day" was asked of co-ops too, until the PO removed it (#19).
             ("Parents help or teach", [*_CLASSES, q.CO_OPS]),
-            # A co-op's question only: parents are there by definition, so what
-            # is left to ask is whether a family can come for part of the day.
-            ("Part of the day", [q.CO_OPS]),
         ],
     },
     {
