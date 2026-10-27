@@ -225,7 +225,6 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "class_names",
             "faith_basis",
             "instructor_info",
-            "highlights",
             "website",
             "facebook",
             "email",
@@ -263,7 +262,6 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "class_names": "Classes offered",
             "faith_basis": "Faith affiliation",
             "instructor_info": "Teacher qualifications / leader bio",
-            "highlights": "What makes your program special",
             "website": "Website",
             "facebook": "Facebook page URL",
             "email": "Public email address",
@@ -306,9 +304,9 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "short_description": "One sentence that families read in the directory "
             "before they click through — e.g. 'A weekly conversation class for "
             "beginners, ages 8 to 12.'",
-            "description": "What you do, who it is for, and how to join — e.g. what a "
-            "typical session looks like, how big the groups are, and the first step to "
-            "sign up. Leave a blank line between paragraphs.",
+            "description": "What you do and the benefits of your program — e.g. what a "
+            "typical session looks like, and what makes it special. Leave a blank line "
+            "between paragraphs.",
             "class_names": "Each class you offer, separated by commas — e.g. "
             "'Algebra I, Geometry, Chemistry'.",
             "faith_basis": "Families ask, so we ask. Leave it blank if you would rather "
@@ -317,9 +315,6 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "'Taught by Patty Ruiz, a former middle school Spanish teacher with 12 years "
             "in the classroom.' Names are optional; experience and qualifications are "
             "what families look for.",
-            "highlights": "What a family gets with you that they would not get anywhere "
-            "else — e.g. 'Groups of six or fewer, and every student performs in a spring "
-            "showcase.' Two or three sentences is plenty.",
             "website": "Your program's own website, starting with https:// — e.g. "
             "'https://learningwithpatty.com'.",
             "facebook": "The whole address of your page or group, starting with https:// "
@@ -361,7 +356,6 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             "short_description": forms.TextInput,
             "description": forms.Textarea(attrs={"rows": 8}),
             "instructor_info": forms.Textarea(attrs={"rows": 4}),
-            "highlights": forms.Textarea(attrs={"rows": 4}),
             "cost_notes": forms.Textarea(attrs={"rows": 3}),
             "meeting_schedule": forms.Textarea(attrs={"rows": 2}),
             # `type=date` and `type=time` rather than a date picker of our own:

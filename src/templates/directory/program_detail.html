@@ -25,17 +25,10 @@
       {% if program.description %}<div class="prose">{{ program.description|safe }}</div>{% endif %}
 
       {% comment %}
-      Both of these are plain text typed by whoever registered the program, so
-      they get `linebreaks` rather than `safe`. The rich text editor is ours, and
-      only `description` goes through it.
+      Plain text typed by whoever registered the program, so `linebreaks` rather
+      than `safe`. The rich text editor is ours, and only `description` goes
+      through it.
       {% endcomment %}
-      {% if program.highlights %}
-        <section class="program-section">
-          <h2>What makes it special</h2>
-          <div class="prose">{{ program.highlights|linebreaks }}</div>
-        </section>
-      {% endif %}
-
       {% if program.instructor_info %}
         <section class="program-section">
           <h2>Teacher qualifications / leader bio</h2>

@@ -95,7 +95,6 @@ ASKED_BY = {
     "description": EVERY,
     "category": EVERY,
     "tags": EVERY,
-    "highlights": EVERY,
     "website": EVERY,
     "facebook": EVERY,
     "email": EVERY,

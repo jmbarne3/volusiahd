@@ -569,12 +569,6 @@ class SharedProgramFields(models.Model):
         help_text="Who teaches or leads, and what qualifies them. Families ask this before they "
         "ask almost anything else.",
     )
-    highlights = models.TextField(
-        "what makes it special",
-        blank=True,
-        help_text="Plain text. What a family gets here that they would not get "
-        "elsewhere. Blank lines start new paragraphs.",
-    )
     faith_basis = models.CharField(
         "faith affiliation",
         max_length=8,

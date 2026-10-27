@@ -254,7 +254,6 @@ class Command(BaseCommand):
 
         days, start, end, cost_basis, cost_notes = SHAPES[slug]
         fields = {
-            "highlights": self._highlights(name, heading),
             "cost_basis": cost_basis,
             "cost_notes": cost_notes,
             "meeting_days": days,
@@ -349,14 +348,6 @@ class Command(BaseCommand):
             "from across the county.</p>"
             "<p>Everything here is invented for a local review of the directory. "
             "Nothing on this page describes a real program.</p>"
-        )
-
-    def _highlights(self, name, heading):
-        return (
-            f"Small groups, and the same people year after year — most of {name} is "
-            "run by parents who are still homeschooling their own children.\n\n"
-            "This text exists so that the 'what makes it special' section has "
-            "something in it."
         )
 
     def _classes(self, slug):

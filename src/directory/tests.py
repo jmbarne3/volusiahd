@@ -1898,7 +1898,6 @@ class SharedFieldTests(TestCase):
             host_name="Mainland Fellowship",
             class_names="Algebra I, Latin",
             instructor_info="Two teachers, both certified.",
-            highlights="Small classes.",
             faith_basis=Submission.Faith.FAITH_BASED,
             website="https://example.org",
             facebook="https://facebook.com/groups/x",
@@ -3375,6 +3374,74 @@ class RetireParentInvolvementMigrationTests(TestCase):
             Tag.objects.create(name=slug, slug=slug)
         migration.retire(django_apps, None)
         self.assertEqual(sorted(Tag.objects.values_list("slug", flat=True)), ["drop-off", "lego"])
+
+
+class FoldHighlightsMigrationTests(SimpleTestCase):
+    """Migration 0019 keeps what people wrote in "What makes it special" (#18).
+
+    The column is gone from the current models, so this runs the migration's
+    function against stand-ins rather than the real historical models.
+    """
+
+    class _Row:
+        def __init__(self, description, highlights):
+            self.description, self.highlights, self.saved = description, highlights, None
+
+        def save(self, update_fields):
+            self.saved = update_fields
+
+    def _run(self, programs, submissions):
+        migration = importlib.import_module(
+            "directory.migrations.0019_fold_highlights_into_description"
+        )
+
+        def model(rows):
+            manager = SimpleNamespace(
+                exclude=lambda highlights: [r for r in rows if r.highlights != highlights]
+            )
+            return SimpleNamespace(objects=manager)
+
+        models_by_name = {"Program": model(programs), "Submission": model(submissions)}
+        apps = SimpleNamespace(get_model=lambda app, name: models_by_name[name])
+        migration.fold_highlights(apps, None)
+
+    def test_program_highlights_become_escaped_paragraphs(self):
+        program = self._Row("<p>We meet weekly.</p>", "Small <b>groups</b>.\n\nSpring show.")
+        self._run([program], [])
+        self.assertEqual(
+            program.description,
+            "<p>We meet weekly.</p><p>Small &lt;b&gt;groups&lt;/b&gt;.</p><p>Spring show.</p>",
+        )
+
+    def test_submission_highlights_follow_a_blank_line(self):
+        submission = self._Row("We meet weekly.\n", "Small groups.")
+        empty = self._Row("", "Only highlights.")
+        self._run([], [submission, empty])
+        self.assertEqual(submission.description, "We meet weekly.\n\nSmall groups.")
+        self.assertEqual(empty.description, "Only highlights.")
+
+    def test_rows_without_highlights_are_left_alone(self):
+        program = self._Row("<p>Unchanged.</p>", "")
+        self._run([program], [])
+        self.assertIsNone(program.saved)
+
+
+class DescriptionWordingTests(SimpleTestCase):
+    """The PO's wording for the full description, and no separate highlights (#17, #18)."""
+
+    def test_the_description_hint_uses_the_product_owners_wording(self):
+        from .forms import ProgramRegistrationForm
+
+        self.assertIn(
+            "What you do and the benefits of your program — e.g. what a typical session "
+            "looks like, and what makes it special. Leave a blank line between paragraphs.",
+            str(ProgramRegistrationForm.base_fields["description"].help_text),
+        )
+
+    def test_highlights_is_not_on_the_form(self):
+        from .forms import ProgramRegistrationForm
+
+        self.assertNotIn("highlights", ProgramRegistrationForm.base_fields)
 
 
 class RegistrationExampleTextTests(TestCase):

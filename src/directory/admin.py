@@ -176,7 +176,6 @@ class ProgramAdmin(ModelAdmin):
                 "fields": [
                     "short_description",
                     "description",
-                    "highlights",
                     "logo",
                 ],
             },
@@ -553,7 +552,6 @@ class SubmissionAdmin(ModelAdmin):
                     "host_name",
                     "short_description",
                     "description",
-                    "highlights",
                     "category",
                     "tags",
                     "logo_preview",

@@ -91,7 +91,6 @@ def _matches_word(word):
         | Q(host_name__icontains=word)
         | Q(short_description__icontains=word)
         | Q(description__icontains=word)
-        | Q(highlights__icontains=word)
         | Q(class_names__icontains=word)
         # Both spellings of a place: what the program typed and what it
         # resolved to. Somebody searching "Ormond" should find a program
