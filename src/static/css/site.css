@@ -1081,13 +1081,28 @@ main.listing-page { padding-block: 0 var(--s-8); }
   margin: var(--s-2) 0 0;
   grid-template-columns: repeat(auto-fill, minmax(min(11rem, 100%), 1fr));
 }
+/* Top-aligned, so a label that wraps to two lines keeps its box beside the
+   first line rather than floating between them. The box is then pushed down by
+   half the difference between a line and itself, which centres it on that
+   first line whatever the font size. It is given a size, rather than left to
+   the browser's default, so that sum is known. */
 .field > div:has(input:is([type=checkbox], [type=radio])) label {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: .45rem;
   margin: 0;
   font-weight: 400;
   color: var(--ink);
+}
+.field > div:has(input:is([type=checkbox], [type=radio])) label input {
+  /* Inputs carry the browser's own smaller font, and `em` and `lh` would be
+     measured from it rather than from the label beside them. */
+  font: inherit;
+  --box: .9em;
+  flex: none;
+  width: var(--box);
+  height: var(--box);
+  margin: calc((1lh - var(--box)) / 2) 0 0;
 }
 
 /* The registration form hides a question that the chosen heading does not ask,
@@ -1100,6 +1115,12 @@ main.listing-page { padding-block: 0 var(--s-8); }
 .field[hidden],
 fieldset[hidden],
 .field > div:has(input:is([type=checkbox], [type=radio])) label[hidden] {
+  display: none;
+}
+/* Django wraps each answer in a <div> of its own, and that <div> is the grid
+   cell. Hiding only the label left the cell behind, empty, so the answers on
+   offer were pushed along the row by the ones that were not. */
+.field > div:has(input:is([type=checkbox], [type=radio])) > div:has(> label[hidden]) {
   display: none;
 }
 
