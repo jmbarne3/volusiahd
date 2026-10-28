@@ -435,11 +435,12 @@ class Tag(models.Model):
     Created here and nowhere else. The registration form lets people pick from
     the list but never add to it, because the entire value of a tag is that the
     same idea always carries the same word, and free entry guarantees the
-    opposite. Suggestions from registrants are a later problem, and a different
-    one.
+    opposite. A registrant who can't find the word can suggest one, which the
+    directory's owner decides on (`TagSuggestion`).
 
     Which tags a registrant is shown depends on the heading they chose; that
-    pairing lives on `Category.tags`.
+    pairing lives on `Category.tags`. A tag with no heading and no question is
+    a "general" tag: offered to every heading, but only to someone typing.
     """
 
     name = models.CharField(max_length=60, unique=True)
@@ -1609,3 +1610,92 @@ class SubmissionLocation(BaseLocation):
     class Meta(BaseLocation.Meta):
         verbose_name = "place"
         verbose_name_plural = "places they named"
+
+
+class TagSuggestion(models.Model):
+    """A tag a provider asked for on the registration form (#25).
+
+    Tags stay a vocabulary we keep, so a suggestion is a request rather than a
+    tag. The directory's owner decides it in the admin, and nothing about the
+    registration waits on that: a program can be approved and published while
+    its suggestion is still pending. Whenever the suggestion is decided, the tag
+    it ends up as is added to the registration and to the program it became.
+
+    An approved suggestion becomes a "general" tag: no heading and no question,
+    so it is never suggested on the form, only found by typing. If it earns a
+    place as a suggestion for a heading, she adds it to that heading.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Waiting for a decision"
+        APPROVED = "approved", "Approved as a new tag"
+        MAPPED = "mapped", "Used an existing tag instead"
+        REJECTED = "rejected", "Rejected"
+
+    submission = models.ForeignKey(
+        Submission, related_name="tag_suggestions", on_delete=models.CASCADE
+    )
+    name = models.CharField("suggested tag", max_length=60)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    tag = models.ForeignKey(
+        Tag,
+        related_name="suggestions",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        help_text="The tag this suggestion became, or the existing tag used instead.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "tag suggestion"
+        verbose_name_plural = "tag suggestions"
+
+    def __str__(self):
+        return self.name
+
+    def existing_tag(self):
+        """A tag that already carries this name, if one does, ignoring case."""
+        return Tag.objects.filter(name__iexact=self.name.strip()).first()
+
+    def approve(self):
+        """Make it a new general tag, or use the tag that already has its name."""
+        existing = self.existing_tag()
+        if existing:
+            self.use(existing)
+            return
+        name = self.name.strip()
+        tag = Tag.objects.create(name=name, slug=unique_tag_slug(name))
+        self._decide(self.Status.APPROVED, tag)
+
+    def use(self, tag):
+        """Use an existing tag instead of making a new one."""
+        self._decide(self.Status.MAPPED, tag)
+
+    def reject(self):
+        self._decide(self.Status.REJECTED, None)
+
+    def _decide(self, status, tag):
+        self.status, self.tag, self.decided_at = status, tag, timezone.now()
+        self.save(update_fields=["status", "tag", "decided_at"])
+        if tag is None:
+            return
+        # On the registration, so a program approved later carries it across;
+        # and on the program, if the registration was approved first.
+        self.submission.tags.add(tag)
+        if self.submission.created_program_id:
+            self.submission.created_program.tags.add(tag)
+
+
+def unique_tag_slug(name):
+    """A slug for a new tag that no other tag has."""
+    from django.utils.text import slugify
+
+    base = slugify(name)[:60] or "tag"
+    slug, n = base, 2
+    while Tag.objects.filter(slug=slug).exists():
+        slug = f"{base[:57]}-{n}"
+        n += 1
+    return slug

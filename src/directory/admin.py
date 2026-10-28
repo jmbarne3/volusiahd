@@ -12,7 +12,8 @@ from django.contrib import admin, messages
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.db.models import Count
-from django.urls import reverse_lazy
+from django.shortcuts import redirect
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 from django.utils.safestring import mark_safe
@@ -31,6 +32,7 @@ from .models import (
     Submission,
     Tag,
     TagGroup,
+    TagSuggestion,
 )
 
 # She will never touch Groups. Site-wide permissions are not a thing we use.
@@ -49,6 +51,12 @@ def _addresses(count):
 def pending_submission_count(request):
     """Sidebar badge: how many submissions are waiting on her."""
     count = Submission.objects.filter(status=Submission.Status.NEW).count()
+    return count or None
+
+
+def pending_tag_suggestion_count(request):
+    """Sidebar badge: how many tag suggestions are waiting on her (#25)."""
+    count = TagSuggestion.objects.filter(status=TagSuggestion.Status.PENDING).count()
     return count or None
 
 
@@ -498,6 +506,143 @@ class SearchSynonymAdmin(ModelAdmin):
     fields = ["words"]
 
 
+class TagSuggestionInline(TabularInline):
+    """The tags a registration suggested, on the screen where it's approved.
+
+    Shown so they can be decided in the same sitting, but approving the
+    registration never waits on them (#25). The decisions themselves are made
+    on the Tag suggestions screen, which this links to.
+    """
+
+    model = TagSuggestion
+    extra = 0
+    can_delete = False
+    # The name is already the row's first column.
+    show_title = False
+    fields = ["name", "status", "tag", "decide_link"]
+    readonly_fields = fields
+    verbose_name_plural = "Tags they suggested"
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    @display(description="")
+    def decide_link(self, obj):
+        if obj.status != TagSuggestion.Status.PENDING:
+            return "—"
+        url = reverse_lazy("admin:directory_tagsuggestion_change", args=[obj.pk])
+        return format_html('<a href="{}" class="text-primary-600 font-medium">Decide →</a>', url)
+
+
+@admin.register(TagSuggestion)
+class TagSuggestionAdmin(ModelAdmin):
+    """Tags providers asked for, waiting on a decision (#25).
+
+    Three outcomes. **Approve** makes it a new general tag: no heading, so it's
+    never suggested on the form, only found by typing. **Use an existing tag**
+    (pick one below and save) files it under a tag we already have. **Reject**
+    leaves the program as it is. Either of the first two adds the tag to the
+    registration, and to its program if that's already published.
+    """
+
+    list_display = ["name", "program_display", "status", "tag", "created_at"]
+    list_filter = ["status"]
+    search_fields = ["name", "submission__program_name"]
+    actions = ["approve_selected", "reject_selected"]
+    actions_detail = ["approve_one", "reject_one"]
+    autocomplete_fields = ["tag"]
+    fields = ["name", "submission_link", "status", "existing_match", "tag", "decided_at"]
+    readonly_fields = ["name", "submission_link", "status", "existing_match", "decided_at"]
+
+    def has_add_permission(self, request):
+        return False
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("submission", "tag")
+
+    @display(description="Program", ordering="submission__program_name")
+    def program_display(self, obj):
+        return obj.submission.program_name
+
+    @display(description="From the registration")
+    def submission_link(self, obj):
+        url = reverse_lazy("admin:directory_submission_change", args=[obj.submission_id])
+        return format_html('<a href="{}">{}</a>', url, obj.submission.program_name)
+
+    @display(description="A tag with this name")
+    def existing_match(self, obj):
+        if obj.status != TagSuggestion.Status.PENDING:
+            return "—"
+        tag = obj.existing_tag()
+        if not tag:
+            return "None — approving makes a new tag."
+        return f"“{tag.name}” already exists. Approving uses it rather than making a duplicate."
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        field = form.base_fields.get("tag")
+        if field:
+            field.label = "Use an existing tag instead"
+            field.help_text = (
+                "Pick a tag and save to file this suggestion under it. Leave blank and "
+                "use the Approve or Reject actions on the list instead."
+            )
+        return form
+
+    def get_readonly_fields(self, request, obj=None):
+        # Once decided, the outcome is a record, not something to edit.
+        if obj and obj.status != TagSuggestion.Status.PENDING:
+            return [*self.readonly_fields, "tag"]
+        return self.readonly_fields
+
+    def save_model(self, request, obj, form, change):
+        if "tag" in form.changed_data and obj.tag and obj.status == TagSuggestion.Status.PENDING:
+            obj.use(obj.tag)
+            self.message_user(request, f"“{obj.name}” filed under “{obj.tag.name}”.")
+            return
+        super().save_model(request, obj, form, change)
+
+    @action(description="Approve — make a new tag")
+    def approve_selected(self, request, queryset):
+        done = self._decide(queryset, TagSuggestion.approve)
+        self.message_user(request, f"Approved {done}.", messages.SUCCESS)
+
+    @action(description="Reject")
+    def reject_selected(self, request, queryset):
+        done = self._decide(queryset, TagSuggestion.reject)
+        self.message_user(request, f"Rejected {done}.", messages.SUCCESS)
+
+    @action(description="Approve — make a new tag", url_path="approve")
+    def approve_one(self, request, object_id):
+        return self._decide_one(request, object_id, TagSuggestion.approve, "Approved")
+
+    @action(description="Reject", url_path="reject")
+    def reject_one(self, request, object_id):
+        return self._decide_one(request, object_id, TagSuggestion.reject, "Rejected")
+
+    def _decide_one(self, request, object_id, decide, done):
+        suggestion = TagSuggestion.objects.select_related("submission__created_program").get(
+            pk=object_id
+        )
+        if suggestion.status != TagSuggestion.Status.PENDING:
+            self.message_user(request, "That suggestion was already decided.", messages.WARNING)
+        else:
+            decide(suggestion)
+            self.message_user(request, f"{done} “{suggestion.name}”.", messages.SUCCESS)
+        return redirect(reverse("admin:directory_tagsuggestion_change", args=[object_id]))
+
+    @staticmethod
+    def _decide(queryset, decide):
+        pending = queryset.filter(status=TagSuggestion.Status.PENDING).select_related(
+            "submission__created_program"
+        )
+        count = 0
+        for suggestion in pending:
+            decide(suggestion)
+            count += 1
+        return count
+
+
 @admin.register(Submission)
 class SubmissionAdmin(ModelAdmin):
     """One queue, two kinds.
@@ -525,6 +670,7 @@ class SubmissionAdmin(ModelAdmin):
         "locations__city",
     ]
     date_hierarchy = "created_at"
+    inlines = [TagSuggestionInline]
     actions = ["approve_and_publish", "create_draft_program", "mark_rejected"]
     # Her chance to correct the registrant's tagging before it is published.
     autocomplete_fields = ["tags"]

@@ -50,24 +50,39 @@ def admin_link(view_name, *args):
 
 
 def submission_received(submission):
-    """A program was registered or suggested (#28)."""
+    """A program was registered or suggested (#28), with any tags it suggested (#25).
+
+    Tag suggestions only ever arrive with a registration, so they're announced
+    in that registration's email rather than in one of their own: one email
+    per thing somebody sent, not one per field they filled in.
+    """
     registration = submission.is_registration
     kind = "registration" if registration else "suggestion"
     category = submission.category.name if submission.category else "No category chosen"
     sender = submission.submitter_name or "(no name given)"
     if submission.submitter_email:
         sender += f" <{submission.submitter_email}>"
+    suggested = list(submission.tag_suggestions.order_by("pk").values_list("name", flat=True))
 
-    body = "\n".join(
-        [
-            f"A new program {kind} is waiting in the directory.",
+    lines = [
+        f"A new program {kind} is waiting in the directory.",
+        "",
+        f"Program:   {submission.program_name}",
+        f"Category:  {category}",
+        f"Sent by:   {sender}",
+    ]
+    if suggested:
+        lines.append(f"Suggested tags: {', '.join(suggested)}")
+    lines += ["", "Review it here:", admin_link("admin:directory_submission_change", submission.pk)]
+    if suggested:
+        lines += [
             "",
-            f"Program:   {submission.program_name}",
-            f"Category:  {category}",
-            f"Sent by:   {sender}",
-            "",
-            "Review it here:",
-            admin_link("admin:directory_submission_change", submission.pk),
+            "Decide the tag suggestions here (the program doesn't have to wait):",
+            admin_link("admin:directory_tagsuggestion_changelist") + "?status__exact=pending",
         ]
-    )
-    notify(f"New {kind}: {submission.program_name}", body)
+
+    subject = f"New {kind}: {submission.program_name}"
+    if suggested:
+        count = len(suggested)
+        subject += f" ({count} tag suggestion{'s' if count != 1 else ''})"
+    notify(subject, "\n".join(lines))

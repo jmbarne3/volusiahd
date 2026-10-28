@@ -16,10 +16,15 @@ from django.db import models
 
 from . import questions as q
 from .addresses import LocationsField
-from .models import Category, Submission, SubmissionLocation, Tag, TagGroup
+from .models import Category, Submission, SubmissionLocation, Tag, TagGroup, TagSuggestion
 
 # Bots fill every field they find; people never see this one.
 HONEYPOT_FIELD = "website_url"
+
+# How many tags one registration may suggest, and how long each may be: a tag
+# is a word or two, and more than a few suggestions is a description.
+MAX_TAG_SUGGESTIONS = 3
+TAG_NAME_MAX = Tag._meta.get_field("name").max_length
 
 # Answers to a tag question that contradict each other, by tag slug, with what to
 # tell the person who ticked both. Most answers combine freely; these are the
@@ -52,9 +57,12 @@ class ScopedChoices:
         option = super().create_option(name, value, *args, **kwargs)
         tag = getattr(value, "instance", None)
         if tag is not None:
-            option["attrs"]["data-categories"] = " ".join(
-                sorted(category.slug for category in tag.categories.all())
-            )
+            headings = sorted(category.slug for category in tag.categories.all())
+            option["attrs"]["data-categories"] = " ".join(headings)
+            # A general tag (#25): no heading and no question. Offered under
+            # every heading, but only to someone typing — see register-form.js.
+            if not headings and tag.group_id is None:
+                option["attrs"]["data-general"] = ""
         return option
 
 
@@ -190,13 +198,10 @@ class ProgramRegistrationForm(BaseSubmissionForm):
     # evaluated per request rather than at import, so a tag added in the admin
     # this morning is on the form this afternoon.
     #
-    # Only tags that belong to at least one heading are offered at all. The rest
-    # are ours to apply in the admin, and offering one here that no heading
-    # accepts would be a choice that always fails validation.
+    # The heading's own tags, plus the general ones that belong to no heading
+    # (#25). Answers to questions are asked separately, so they are left out.
     tags = forms.ModelMultipleChoiceField(
-        queryset=Tag.objects.filter(categories__isnull=False, group__isnull=True)
-        .distinct()
-        .prefetch_related("categories"),
+        queryset=Tag.objects.filter(group__isnull=True).prefetch_related("categories"),
         required=False,
         # A plain <select multiple>, which Select2 turns into a searchable
         # multiselect on the registration page. Without JavaScript it stays a
@@ -209,10 +214,20 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             }
         ),
         label="Tags",
-        help_text="These follow from the heading you chose above. We keep this list, "
-        "so if the word you want is missing, say so in your description and we will "
-        "look at adding it. Answers to the questions above are tags too — they are "
-        "asked separately because they have a fixed set of answers.",
+        help_text="These follow from the heading you chose above, and typing finds "
+        "more. Answers to the questions above are tags too — they are asked "
+        "separately because they have a fixed set of answers.",
+    )
+
+    # Not a model field: each one becomes a `TagSuggestion` once the
+    # registration is saved, for the directory's owner to decide (#25).
+    suggested_tags = forms.CharField(
+        required=False,
+        max_length=200,
+        label="Suggest a tag",
+        help_text="Can't find the word you want? Suggest up to three, separated by "
+        "commas — e.g. 'Lego robotics'. We review every suggestion, and your listing "
+        "won't wait for it.",
     )
 
     class Meta:
@@ -515,7 +530,11 @@ class ProgramRegistrationForm(BaseSubmissionForm):
                     "Please choose a heading. The tags you picked depend on it.",
                 )
             else:
-                allowed = set(category.tags.values_list("pk", flat=True))
+                allowed = set(category.tags.values_list("pk", flat=True)) | set(
+                    Tag.objects.filter(categories__isnull=True, group__isnull=True).values_list(
+                        "pk", flat=True
+                    )
+                )
                 stray = [tag.name for tag in tags if tag.pk not in allowed]
                 if stray:
                     self.add_error(
@@ -607,9 +626,46 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             return False
         return None if field.null else ""
 
+    def clean_suggested_tags(self):
+        """The suggestions as a list: trimmed, de-duplicated, and checked."""
+        seen, names = set(), []
+        for name in self.cleaned_data.get("suggested_tags", "").split(","):
+            name = " ".join(name.split())
+            if name and name.lower() not in seen:
+                seen.add(name.lower())
+                names.append(name)
+        if len(names) > MAX_TAG_SUGGESTIONS:
+            raise forms.ValidationError(
+                f"Please suggest at most {MAX_TAG_SUGGESTIONS} tags. Anything more "
+                "belongs in your description."
+            )
+        too_long = [name for name in names if len(name) > TAG_NAME_MAX]
+        if too_long:
+            raise forms.ValidationError(
+                f"A tag is a word or two. Please shorten: {', '.join(too_long)}."
+            )
+        return names
+
     def save(self, commit=True):
         self.instance.kind = Submission.Kind.REGISTRATION
-        return super().save(commit=commit)
+        submission = super().save(commit=commit)
+        if commit:
+            self._write_suggestions(submission)
+        else:
+            deferred = self.save_m2m
+
+            def save_m2m():
+                deferred()
+                self._write_suggestions(submission)
+
+            self.save_m2m = save_m2m
+        return submission
+
+    def _write_suggestions(self, submission):
+        TagSuggestion.objects.bulk_create(
+            TagSuggestion(submission=submission, name=name)
+            for name in self.cleaned_data.get("suggested_tags", [])
+        )
 
 
 class ProgramReferralForm(BaseSubmissionForm):

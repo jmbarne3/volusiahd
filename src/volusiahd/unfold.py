@@ -61,6 +61,12 @@ UNFOLD = {
                         "link": reverse_lazy("admin:directory_tag_changelist"),
                     },
                     {
+                        "title": _("Tag suggestions"),
+                        "icon": "new_label",
+                        "link": reverse_lazy("admin:directory_tagsuggestion_changelist"),
+                        "badge": "directory.admin.pending_tag_suggestion_count",
+                    },
+                    {
                         "title": _("Search synonyms"),
                         "icon": "swap_horiz",
                         "link": reverse_lazy("admin:directory_searchsynonym_changelist"),

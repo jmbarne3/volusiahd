@@ -33,6 +33,8 @@
   function offeredTo(element, slug) {
     // No heading chosen yet: show everything, which is what the server does too.
     if (slug === "") return true;
+    // A general tag belongs to no heading, so it's offered under all of them.
+    if (element.hasAttribute("data-general")) return true;
     var attribute = element.getAttribute("data-asked-by") || element.getAttribute("data-categories");
     if (attribute === null) return true;
     return attribute.split(" ").indexOf(slug) !== -1;
@@ -74,10 +76,19 @@
     if (enhanced) {
       // `size` only helps the native fallback; Select2 would honour it as a height.
       tagSelect.removeAttribute("size");
+      var defaultMatcher = jq.fn.select2.defaults.defaults.matcher;
       jq(tagSelect).select2({
         width: "100%",
         placeholder: tagSelect.dataset.placeholder || "",
-        closeOnSelect: false
+        closeOnSelect: false,
+        // The list that opens before anyone types is the heading's own
+        // suggestions. General tags (#25) join in once somebody types, so the
+        // suggestions stay short and the rest are still findable.
+        matcher: function (params, data) {
+          var typed = params.term && params.term.trim() !== "";
+          if (!typed && data.element && data.element.hasAttribute("data-general")) return null;
+          return defaultMatcher(params, data);
+        }
       });
     }
 
@@ -229,6 +240,13 @@
       pages.forEach(function (page) {
         page.hidden = page !== current;
       });
+      // Select2 sizes its search box when the list changes, and a list that
+      // changed while its page was hidden measured zero: no placeholder, and
+      // a box that looks empty. Let it measure again now it can be seen.
+      var jq = window.jQuery;
+      if (jq && jq.fn.select2) {
+        jq(current).find("select.select2-hidden-accessible").trigger("change.select2");
+      }
       back.hidden = index === 0;
       next.hidden = last;
       submit.hidden = !last;

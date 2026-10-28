@@ -56,6 +56,7 @@ from .models import (
     SubmissionLocation,
     Tag,
     TagGroup,
+    TagSuggestion,
     join_weekdays,
     split_weekdays,
 )
@@ -559,17 +560,17 @@ class RegistrationTests(TestCase):
         self.assertContains(response, 'name="tags"')
         self.assertNotContains(response, '<input type="text" name="tags"')
 
-    def test_the_form_only_offers_tags_that_belong_to_a_heading(self):
-        """A tag under no heading is one we apply ourselves.
+    def test_a_tag_under_no_heading_is_offered_as_a_general_tag(self):
+        """A tag under no heading is a general tag, offered under all of them (#25).
 
-        Offering it here would be offering a choice that can only ever fail
-        validation, so it is left out of the field entirely.
+        It used to be left out as one we applied ourselves; approving a
+        provider's suggestion now makes exactly this kind of tag.
         """
         self._tag("Dual enrollment", "dual-enrollment", self.category)
-        self._tag("Internal only", "internal-only")
+        self._tag("Wheelchair accessible", "wheelchair-accessible")
         response = self.client.get(reverse("directory:register"))
         self.assertContains(response, "Dual enrollment")
-        self.assertNotContains(response, "Internal only")
+        self.assertContains(response, "Wheelchair accessible")
 
     def test_each_tag_option_says_which_headings_it_belongs_to(self):
         """What the page's JavaScript narrows the list with.
@@ -3324,6 +3325,178 @@ class SearchSynonymTests(TestCase):
         self.client.force_login(user)
         response = self.client.get(reverse("admin:directory_searchsynonym_changelist"))
         self.assertContains(response, "theater, theatre")
+
+
+class TagSuggestionTests(TestCase):
+    """Providers can suggest a tag; the owner decides; nothing waits (#25)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.category = Category.objects.create(name="Co-ops", slug="co-ops")
+        cls.other = Category.objects.create(name="Sports", slug=q.SPORTS)
+        cls.soccer = Tag.objects.create(name="Soccer", slug="soccer")
+        cls.soccer.categories.add(cls.other)
+        cls.general = Tag.objects.create(name="Wheelchair accessible", slug="wheelchair")
+
+    def _submission(self, **fields):
+        return Submission.objects.create(program_name="Coastal Co-op", **fields)
+
+    def _suggest(self, name, **fields):
+        return TagSuggestion.objects.create(submission=self._submission(**fields), name=name)
+
+    # --- Deciding ---------------------------------------------------------
+
+    def test_approving_makes_a_general_tag_and_files_the_registration_under_it(self):
+        suggestion = self._suggest("Lego robotics")
+        suggestion.approve()
+        tag = Tag.objects.get(name="Lego robotics")
+        self.assertEqual((tag.slug, tag.group, tag.categories.count()), ("lego-robotics", None, 0))
+        self.assertEqual(suggestion.status, TagSuggestion.Status.APPROVED)
+        self.assertEqual(suggestion.tag, tag)
+        self.assertIsNotNone(suggestion.decided_at)
+        self.assertIn(tag, suggestion.submission.tags.all())
+
+    def test_a_published_program_gets_the_tag_when_it_is_decided_later(self):
+        program = Program.objects.create(
+            name="Coastal Co-op", slug="coastal", short_description="x"
+        )
+        suggestion = self._suggest("Lego robotics", created_program=program)
+        suggestion.approve()
+        self.assertTrue(program.tags.filter(name="Lego robotics").exists())
+
+    def test_a_tag_approved_first_is_carried_across_when_the_program_is_approved(self):
+        suggestion = self._suggest("Lego robotics")
+        suggestion.approve()
+        from .admin import build_program_from
+
+        program = build_program_from(suggestion.submission, Program.Status.PUBLISHED)
+        self.assertTrue(program.tags.filter(name="Lego robotics").exists())
+
+    def test_approving_a_name_that_already_exists_uses_that_tag(self):
+        suggestion = self._suggest("  soccer ")
+        suggestion.approve()
+        self.assertEqual(Tag.objects.filter(name__iexact="soccer").count(), 1)
+        self.assertEqual(
+            (suggestion.status, suggestion.tag), (TagSuggestion.Status.MAPPED, self.soccer)
+        )
+
+    def test_using_an_existing_tag(self):
+        suggestion = self._suggest("Football (the round kind)")
+        suggestion.use(self.soccer)
+        self.assertEqual(suggestion.status, TagSuggestion.Status.MAPPED)
+        self.assertIn(self.soccer, suggestion.submission.tags.all())
+        self.assertFalse(Tag.objects.filter(name__startswith="Football").exists())
+
+    def test_rejecting_changes_nothing_else(self):
+        suggestion = self._suggest("Best co-op ever")
+        suggestion.reject()
+        self.assertEqual(suggestion.status, TagSuggestion.Status.REJECTED)
+        self.assertFalse(suggestion.submission.tags.exists())
+        self.assertFalse(Tag.objects.filter(name="Best co-op ever").exists())
+
+    def test_a_new_tag_never_takes_another_tags_slug(self):
+        Tag.objects.create(name="Lego Robotics!", slug="lego-robotics")
+        suggestion = self._suggest("Lego robotics?")
+        suggestion.approve()
+        self.assertEqual(suggestion.tag.slug, "lego-robotics-2")
+
+    # --- The form ---------------------------------------------------------
+
+    def _form(self, **overrides):
+        from .forms import ProgramRegistrationForm
+
+        data = RegistrationTests._payload(self, **overrides)
+        return ProgramRegistrationForm(data)
+
+    def test_suggestions_are_saved_with_the_registration(self):
+        form = self._form(suggested_tags="Lego robotics, lego robotics ,  Marine   biology,")
+        self.assertTrue(form.is_valid(), form.errors)
+        submission = form.save()
+        self.assertEqual(
+            sorted(submission.tag_suggestions.values_list("name", flat=True)),
+            ["Lego robotics", "Marine biology"],
+        )
+
+    def test_no_suggestions_saves_none(self):
+        form = self._form()
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertFalse(form.save().tag_suggestions.exists())
+
+    def test_at_most_three_suggestions(self):
+        form = self._form(suggested_tags="a, b, c, d")
+        self.assertIn("at most 3", form.errors["suggested_tags"][0])
+
+    def test_a_suggestion_is_a_word_or_two(self):
+        form = self._form(suggested_tags="x" * 61)
+        self.assertIn("shorten", form.errors["suggested_tags"][0])
+
+    def test_a_general_tag_can_be_chosen_under_any_heading(self):
+        form = self._form(tags=[str(self.general.pk)])
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_another_headings_tag_is_still_refused(self):
+        form = self._form(tags=[str(self.soccer.pk)])
+        self.assertIn("tags", form.errors)
+
+    def test_general_tags_are_marked_for_the_typeahead(self):
+        html = self.client.get(reverse("directory:register")).content.decode()
+        general = re.search(r"<option[^>]*>\s*Wheelchair accessible", html).group(0)
+        scoped = re.search(r"<option[^>]*>\s*Soccer", html).group(0)
+        self.assertIn("data-general", general)
+        self.assertNotIn("data-general", scoped)
+
+    # --- Email and admin --------------------------------------------------
+
+    @override_settings(NOTIFICATION_EMAILS=["owner@example.org"])
+    def test_the_registration_email_lists_the_suggestions(self):
+        payload = RegistrationTests._payload(self, suggested_tags="Lego robotics, Chess club")
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(reverse("directory:register"), payload)
+        [email] = mail.outbox
+        self.assertEqual(email.subject, "New registration: Coastal Co-op (2 tag suggestions)")
+        self.assertIn("Suggested tags: Lego robotics, Chess club", email.body)
+        self.assertIn("/admin/directory/tagsuggestion/?status__exact=pending", email.body)
+
+    def _admin(self):
+        self.client.force_login(User.objects.create_superuser("admin", "a@example.org", "pw"))
+
+    def test_the_admin_approves_and_rejects_from_the_list(self):
+        self._admin()
+        keep, drop = self._suggest("Lego robotics"), self._suggest("Spam")
+        url = reverse("admin:directory_tagsuggestion_changelist")
+        self.client.post(url, {"action": "approve_selected", "_selected_action": [keep.pk]})
+        self.client.post(url, {"action": "reject_selected", "_selected_action": [drop.pk]})
+        keep.refresh_from_db()
+        drop.refresh_from_db()
+        self.assertEqual(keep.status, TagSuggestion.Status.APPROVED)
+        self.assertEqual(drop.status, TagSuggestion.Status.REJECTED)
+
+    def test_the_detail_page_approves_and_will_not_decide_twice(self):
+        self._admin()
+        suggestion = self._suggest("Lego robotics")
+        url = reverse("admin:directory_tagsuggestion_approve_one", args=[suggestion.pk])
+        self.client.get(url)
+        self.client.get(reverse("admin:directory_tagsuggestion_reject_one", args=[suggestion.pk]))
+        suggestion.refresh_from_db()
+        self.assertEqual(suggestion.status, TagSuggestion.Status.APPROVED)
+
+    def test_picking_an_existing_tag_in_the_admin_files_it_there(self):
+        self._admin()
+        suggestion = self._suggest("Football")
+        url = reverse("admin:directory_tagsuggestion_change", args=[suggestion.pk])
+        self.client.post(url, {"tag": self.soccer.pk})
+        suggestion.refresh_from_db()
+        self.assertEqual(
+            (suggestion.status, suggestion.tag), (TagSuggestion.Status.MAPPED, self.soccer)
+        )
+
+    def test_the_registration_screen_shows_its_suggestions(self):
+        self._admin()
+        suggestion = self._suggest("Lego robotics")
+        url = reverse("admin:directory_submission_change", args=[suggestion.submission.pk])
+        response = self.client.get(url)
+        self.assertContains(response, "Tags they suggested")
+        self.assertContains(response, "Lego robotics")
 
 
 class SuggestedTagsTests(TestCase):
