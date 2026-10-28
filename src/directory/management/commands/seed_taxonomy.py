@@ -14,12 +14,11 @@ The tag questions are structural: `questions.py` asks a heading about ability
 level or parent involvement, and that question only appears if these rows exist.
 Those are seeded in full.
 
-The subject vocabularies are not structural, and most of them are deliberately
-absent. Only the two the field list actually enumerates are here — the eleven
-enrichment subjects and the three performing arts ones. Inventing "Algebra,
-Geometry, Chemistry" for core academics would be us deciding a vocabulary that
-belongs to whoever runs the directory, and a tag nobody chose is worse than a
-tag that is missing, because a missing one gets asked for.
+The subject vocabularies are not structural. They are the suggestions a
+provider sees for their heading, and every list here was approved by the
+directory's owner (#24). Co-ops have none yet, because she turned down the
+drafts and is writing her own (#29). A tag nobody chose is worse than a tag
+that is missing, because a missing one gets asked for.
 """
 
 from django.core.management.base import BaseCommand
@@ -168,8 +167,38 @@ QUESTIONS = [
     },
 ]
 
-# Ordinary subject tags, only where the field list spells them out.
+# The suggested tags for each heading, as the directory's owner approved them
+# (#24). A tag named under two headings is one tag offered to both. Some repeat
+# a question the form already asks ("Online", "Faith-based"); she chose to keep
+# those as search aids.
 SUBJECT_TAGS = [
+    (
+        q.CORE_ACADEMICS,
+        [
+            "Math",
+            "Language arts",
+            "Science",
+            "History",
+            "Writing",
+            "Lab science",
+            "Dual enrollment",
+            "Test prep (SAT/ACT)",
+        ],
+    ),
+    (
+        q.MICROSCHOOLS,
+        [
+            "Full-time",
+            "Part-time",
+            "Two-day hybrid",
+            "Three-day hybrid",
+            "Four-day hybrid",
+            "Project-based learning",
+            "Classical",
+            "Montessori",
+            "Farm-school",
+        ],
+    ),
     (
         q.ENRICHMENT,
         [
@@ -184,9 +213,127 @@ SUBJECT_TAGS = [
             "Bible study",
             "Youth group",
             "Scouting",
+            "Robotics",
+            "Coding",
+            "Chess",
+            "Debate and public speaking",
+            "Sign language",
         ],
     ),
-    (q.PERFORMING_ARTS, ["Dance", "Theater", "Music lessons"]),
+    (
+        q.SPORTS,
+        [
+            "Soccer",
+            "Basketball",
+            "Baseball and softball",
+            "Swimming",
+            "Gymnastics",
+            "Martial arts",
+            "Tennis",
+            "Track and cross country",
+            "Volleyball",
+            "Golf",
+            "Horseback riding",
+            "Archery",
+            "Fitness",
+            "Weightlifting",
+            "Personal training",
+        ],
+    ),
+    (
+        q.PERFORMING_ARTS,
+        [
+            "Dance",
+            "Theater",
+            "Music lessons",
+            "Choir",
+            "Band",
+            "Orchestra",
+            "Musical theater",
+            "Piano",
+            "Guitar",
+            "Strings",
+        ],
+    ),
+    (
+        q.ARTS_AND_CRAFTS,
+        [
+            "Drawing",
+            "Painting",
+            "Pottery and ceramics",
+            "Sewing and textiles",
+            "Photography",
+            "Woodworking",
+        ],
+    ),
+    (
+        q.TUTORING,
+        [
+            "Reading",
+            "Math",
+            "Writing",
+            "Dyslexia",
+            "ESOL",
+            "One-on-one",
+            "Small group",
+            "Online",
+        ],
+    ),
+    (
+        q.TESTING,
+        [
+            "Annual portfolio evaluation",
+            "Standardized testing",
+            "Psychoeducational evaluation",
+            "Gifted testing",
+            "Florida-certified teacher",
+        ],
+    ),
+    (
+        q.SPECIAL_NEEDS,
+        [
+            "Autism",
+            "ADHD",
+            "Dyslexia",
+            "Speech therapy",
+            "Occupational therapy",
+            "Physical therapy",
+            "Sensory-friendly",
+            "Behavioral support",
+        ],
+    ),
+    (
+        q.FIELD_TRIPS,
+        [
+            "Museums",
+            "Nature and parks",
+            "Science centers",
+            "Farms",
+            "History sites",
+            "Behind the scenes",
+        ],
+    ),
+    (
+        q.PLAY_GROUPS,
+        [
+            "Park days",
+            "Teen hangouts",
+            "Holiday events",
+            "Prom and formal dances",
+            "Graduation",
+            "Moms and tots",
+        ],
+    ),
+    (
+        q.PARENT_SUPPORT,
+        [
+            "New to homeschooling",
+            "Special needs parents",
+            "Faith-based",
+            "Curriculum help",
+            "Moms' night out",
+        ],
+    ),
 ]
 
 
@@ -200,9 +347,7 @@ class Command(BaseCommand):
             self._subjects(headings)
         self.stdout.write(
             self.style.SUCCESS(
-                "Done. The subject vocabularies for core academics, sports, arts, "
-                "tutoring, testing and special needs are deliberately empty — those "
-                "are yours to write, under Categories."
+                "Done. Co-ops have no suggested tags yet (#29); add them here or under Categories."
             )
         )
 

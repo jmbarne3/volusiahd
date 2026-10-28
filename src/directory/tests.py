@@ -2571,7 +2571,7 @@ class DeployCommandTests(TestCase):
 
         self.assertEqual(set(Category.objects.values_list("slug", flat=True)), set(q.EVERY))
         self.assertEqual(TagGroup.objects.count(), 4)
-        self.assertEqual(Tag.objects.count(), 27)
+        self.assertEqual(Tag.objects.count(), 112)
         # Every question has answers offered to at least one heading, or it is a
         # question the registration form will never show.
         for group in TagGroup.objects.all():
@@ -3249,6 +3249,43 @@ class SearchSynonymTests(TestCase):
         self.client.force_login(user)
         response = self.client.get(reverse("admin:directory_searchsynonym_changelist"))
         self.assertContains(response, "theater, theatre")
+
+
+class SuggestedTagsTests(TestCase):
+    """Every heading but co-ops offers the tags the PO approved (#24)."""
+
+    def setUp(self):
+        call_command("seed_taxonomy", stdout=StringIO())
+
+    def _suggested(self, slug):
+        return set(
+            Category.objects.get(slug=slug)
+            .tags.filter(group__isnull=True)
+            .values_list("name", flat=True)
+        )
+
+    def test_every_heading_but_co_ops_has_suggestions(self):
+        for slug in q.EVERY:
+            with self.subTest(heading=slug):
+                if slug == q.CO_OPS:
+                    self.assertEqual(self._suggested(slug), set(), "Co-ops wait on #29")
+                else:
+                    self.assertGreaterEqual(len(self._suggested(slug)), 5)
+
+    def test_the_product_owners_additions_are_there(self):
+        self.assertLessEqual({"Four-day hybrid", "Farm-school"}, self._suggested(q.MICROSCHOOLS))
+        self.assertLessEqual(
+            {"Archery", "Fitness", "Weightlifting", "Personal training"},
+            self._suggested(q.SPORTS),
+        )
+        self.assertIn("Orchestra", self._suggested(q.PERFORMING_ARTS))
+
+    def test_a_tag_under_two_headings_is_one_tag(self):
+        dyslexia = Tag.objects.get(name="Dyslexia")
+        self.assertEqual(
+            set(dyslexia.categories.values_list("slug", flat=True)),
+            {q.TUTORING, q.SPECIAL_NEEDS},
+        )
 
 
 class PagedRegistrationFormTests(TestCase):

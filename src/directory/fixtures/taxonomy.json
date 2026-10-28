@@ -185,6 +185,159 @@
 {
   "model": "directory.tag",
   "fields": {
+    "name": "Math",
+    "slug": "math",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Language arts",
+    "slug": "language-arts",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Science",
+    "slug": "science",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "History",
+    "slug": "history",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Writing",
+    "slug": "writing",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Lab science",
+    "slug": "lab-science",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Dual enrollment",
+    "slug": "dual-enrollment",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Test prep (SAT/ACT)",
+    "slug": "test-prep-satact",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Full-time",
+    "slug": "full-time",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Part-time",
+    "slug": "part-time",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Two-day hybrid",
+    "slug": "two-day-hybrid",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Three-day hybrid",
+    "slug": "three-day-hybrid",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Four-day hybrid",
+    "slug": "four-day-hybrid",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Project-based learning",
+    "slug": "project-based-learning",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Classical",
+    "slug": "classical",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Montessori",
+    "slug": "montessori",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Farm-school",
+    "slug": "farm-school",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
     "name": "Baking and cooking",
     "slug": "baking-and-cooking",
     "description": "",
@@ -284,6 +437,186 @@
 {
   "model": "directory.tag",
   "fields": {
+    "name": "Robotics",
+    "slug": "robotics",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Coding",
+    "slug": "coding",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Chess",
+    "slug": "chess",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Debate and public speaking",
+    "slug": "debate-and-public-speaking",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Sign language",
+    "slug": "sign-language",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Soccer",
+    "slug": "soccer",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Basketball",
+    "slug": "basketball",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Baseball and softball",
+    "slug": "baseball-and-softball",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Swimming",
+    "slug": "swimming",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Gymnastics",
+    "slug": "gymnastics",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Martial arts",
+    "slug": "martial-arts",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Tennis",
+    "slug": "tennis",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Track and cross country",
+    "slug": "track-and-cross-country",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Volleyball",
+    "slug": "volleyball",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Golf",
+    "slug": "golf",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Horseback riding",
+    "slug": "horseback-riding",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Archery",
+    "slug": "archery",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Fitness",
+    "slug": "fitness",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Weightlifting",
+    "slug": "weightlifting",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Personal training",
+    "slug": "personal-training",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
     "name": "Dance",
     "slug": "dance",
     "description": "",
@@ -304,6 +637,438 @@
   "fields": {
     "name": "Music lessons",
     "slug": "music-lessons",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Choir",
+    "slug": "choir",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Band",
+    "slug": "band",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Orchestra",
+    "slug": "orchestra",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Musical theater",
+    "slug": "musical-theater",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Piano",
+    "slug": "piano",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Guitar",
+    "slug": "guitar",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Strings",
+    "slug": "strings",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Drawing",
+    "slug": "drawing",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Painting",
+    "slug": "painting",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Pottery and ceramics",
+    "slug": "pottery-and-ceramics",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Sewing and textiles",
+    "slug": "sewing-and-textiles",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Photography",
+    "slug": "photography",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Woodworking",
+    "slug": "woodworking",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Reading",
+    "slug": "reading",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Dyslexia",
+    "slug": "dyslexia",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "ESOL",
+    "slug": "esol",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "One-on-one",
+    "slug": "one-on-one",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Small group",
+    "slug": "small-group",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Online",
+    "slug": "online",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Annual portfolio evaluation",
+    "slug": "annual-portfolio-evaluation",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Standardized testing",
+    "slug": "standardized-testing",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Psychoeducational evaluation",
+    "slug": "psychoeducational-evaluation",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Gifted testing",
+    "slug": "gifted-testing",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Florida-certified teacher",
+    "slug": "florida-certified-teacher",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Autism",
+    "slug": "autism",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "ADHD",
+    "slug": "adhd",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Speech therapy",
+    "slug": "speech-therapy",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Occupational therapy",
+    "slug": "occupational-therapy",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Physical therapy",
+    "slug": "physical-therapy",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Sensory-friendly",
+    "slug": "sensory-friendly",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Behavioral support",
+    "slug": "behavioral-support",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Museums",
+    "slug": "museums",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Nature and parks",
+    "slug": "nature-and-parks",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Science centers",
+    "slug": "science-centers",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Farms",
+    "slug": "farms",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "History sites",
+    "slug": "history-sites",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Behind the scenes",
+    "slug": "behind-the-scenes",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Park days",
+    "slug": "park-days",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Teen hangouts",
+    "slug": "teen-hangouts",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Holiday events",
+    "slug": "holiday-events",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Prom and formal dances",
+    "slug": "prom-and-formal-dances",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Graduation",
+    "slug": "graduation",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Moms and tots",
+    "slug": "moms-and-tots",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "New to homeschooling",
+    "slug": "new-to-homeschooling",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Special needs parents",
+    "slug": "special-needs-parents",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Faith-based",
+    "slug": "faith-based",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Curriculum help",
+    "slug": "curriculum-help",
+    "description": "",
+    "group": null
+  }
+},
+{
+  "model": "directory.tag",
+  "fields": {
+    "name": "Moms' night out",
+    "slug": "moms-night-out",
     "description": "",
     "group": null
   }
@@ -339,6 +1104,21 @@
         "drop-off"
       ],
       [
+        "dual-enrollment"
+      ],
+      [
+        "history"
+      ],
+      [
+        "lab-science"
+      ],
+      [
+        "language-arts"
+      ],
+      [
+        "math"
+      ],
+      [
         "parents-help-or-teach"
       ],
       [
@@ -346,6 +1126,15 @@
       ],
       [
         "parents-welcome-to-stay"
+      ],
+      [
+        "science"
+      ],
+      [
+        "test-prep-satact"
+      ],
+      [
+        "writing"
       ]
     ]
   }
@@ -360,10 +1149,37 @@
     "icon": "cottage",
     "tags": [
       [
+        "classical"
+      ],
+      [
         "core-subjects"
       ],
       [
         "electives"
+      ],
+      [
+        "farm-school"
+      ],
+      [
+        "four-day-hybrid"
+      ],
+      [
+        "full-time"
+      ],
+      [
+        "montessori"
+      ],
+      [
+        "part-time"
+      ],
+      [
+        "project-based-learning"
+      ],
+      [
+        "three-day-hybrid"
+      ],
+      [
+        "two-day-hybrid"
       ]
     ]
   }
@@ -396,6 +1212,15 @@
         "business-and-professional-development"
       ],
       [
+        "chess"
+      ],
+      [
+        "coding"
+      ],
+      [
+        "debate-and-public-speaking"
+      ],
+      [
         "drop-off"
       ],
       [
@@ -423,10 +1248,16 @@
         "parents-welcome-to-stay"
       ],
       [
+        "robotics"
+      ],
+      [
         "stem"
       ],
       [
         "scouting"
+      ],
+      [
+        "sign-language"
       ],
       [
         "youth-group"
@@ -447,6 +1278,15 @@
         "advanced"
       ],
       [
+        "archery"
+      ],
+      [
+        "baseball-and-softball"
+      ],
+      [
+        "basketball"
+      ],
+      [
         "beginner"
       ],
       [
@@ -456,10 +1296,25 @@
         "drop-off"
       ],
       [
+        "fitness"
+      ],
+      [
+        "golf"
+      ],
+      [
+        "gymnastics"
+      ],
+      [
+        "horseback-riding"
+      ],
+      [
         "intermediate"
       ],
       [
         "junior-varsity"
+      ],
+      [
+        "martial-arts"
       ],
       [
         "parents-help-or-teach"
@@ -471,10 +1326,31 @@
         "parents-welcome-to-stay"
       ],
       [
+        "personal-training"
+      ],
+      [
         "skill-based-or-recreational"
       ],
       [
+        "soccer"
+      ],
+      [
+        "swimming"
+      ],
+      [
+        "tennis"
+      ],
+      [
+        "track-and-cross-country"
+      ],
+      [
         "varsity"
+      ],
+      [
+        "volleyball"
+      ],
+      [
+        "weightlifting"
       ]
     ]
   }
@@ -492,7 +1368,13 @@
         "advanced"
       ],
       [
+        "band"
+      ],
+      [
         "beginner"
+      ],
+      [
+        "choir"
       ],
       [
         "dance"
@@ -501,10 +1383,19 @@
         "drop-off"
       ],
       [
+        "guitar"
+      ],
+      [
         "intermediate"
       ],
       [
         "music-lessons"
+      ],
+      [
+        "musical-theater"
+      ],
+      [
+        "orchestra"
       ],
       [
         "parents-help-or-teach"
@@ -514,6 +1405,12 @@
       ],
       [
         "parents-welcome-to-stay"
+      ],
+      [
+        "piano"
+      ],
+      [
+        "strings"
       ],
       [
         "theater"
@@ -537,10 +1434,16 @@
         "beginner"
       ],
       [
+        "drawing"
+      ],
+      [
         "drop-off"
       ],
       [
         "intermediate"
+      ],
+      [
+        "painting"
       ],
       [
         "parents-help-or-teach"
@@ -550,6 +1453,18 @@
       ],
       [
         "parents-welcome-to-stay"
+      ],
+      [
+        "photography"
+      ],
+      [
+        "pottery-and-ceramics"
+      ],
+      [
+        "sewing-and-textiles"
+      ],
+      [
+        "woodworking"
       ]
     ]
   }
@@ -562,7 +1477,32 @@
     "description": "One to one and small group help.",
     "sort_order": 80,
     "icon": "menu_book",
-    "tags": []
+    "tags": [
+      [
+        "dyslexia"
+      ],
+      [
+        "esol"
+      ],
+      [
+        "math"
+      ],
+      [
+        "one-on-one"
+      ],
+      [
+        "online"
+      ],
+      [
+        "reading"
+      ],
+      [
+        "small-group"
+      ],
+      [
+        "writing"
+      ]
+    ]
   }
 },
 {
@@ -573,7 +1513,23 @@
     "description": "Annual evaluations and standardized testing.",
     "sort_order": 90,
     "icon": "assignment",
-    "tags": []
+    "tags": [
+      [
+        "annual-portfolio-evaluation"
+      ],
+      [
+        "florida-certified-teacher"
+      ],
+      [
+        "gifted-testing"
+      ],
+      [
+        "psychoeducational-evaluation"
+      ],
+      [
+        "standardized-testing"
+      ]
+    ]
   }
 },
 {
@@ -584,7 +1540,32 @@
     "description": "Therapies, services, and support.",
     "sort_order": 100,
     "icon": "accessibility_new",
-    "tags": []
+    "tags": [
+      [
+        "adhd"
+      ],
+      [
+        "autism"
+      ],
+      [
+        "behavioral-support"
+      ],
+      [
+        "dyslexia"
+      ],
+      [
+        "occupational-therapy"
+      ],
+      [
+        "physical-therapy"
+      ],
+      [
+        "sensory-friendly"
+      ],
+      [
+        "speech-therapy"
+      ]
+    ]
   }
 },
 {
@@ -595,7 +1576,26 @@
     "description": "Places to go, and groups that organise going.",
     "sort_order": 110,
     "icon": "map",
-    "tags": []
+    "tags": [
+      [
+        "behind-the-scenes"
+      ],
+      [
+        "farms"
+      ],
+      [
+        "history-sites"
+      ],
+      [
+        "museums"
+      ],
+      [
+        "nature-and-parks"
+      ],
+      [
+        "science-centers"
+      ]
+    ]
   }
 },
 {
@@ -606,7 +1606,26 @@
     "description": "Park days, meet-ups, and teen hangouts.",
     "sort_order": 120,
     "icon": "diversity_3",
-    "tags": []
+    "tags": [
+      [
+        "graduation"
+      ],
+      [
+        "holiday-events"
+      ],
+      [
+        "moms-and-tots"
+      ],
+      [
+        "park-days"
+      ],
+      [
+        "prom-and-formal-dances"
+      ],
+      [
+        "teen-hangouts"
+      ]
+    ]
   }
 },
 {
@@ -617,7 +1636,23 @@
     "description": "For the adults doing the teaching.",
     "sort_order": 130,
     "icon": "volunteer_activism",
-    "tags": []
+    "tags": [
+      [
+        "curriculum-help"
+      ],
+      [
+        "faith-based"
+      ],
+      [
+        "moms-night-out"
+      ],
+      [
+        "new-to-homeschooling"
+      ],
+      [
+        "special-needs-parents"
+      ]
+    ]
   }
 }
 ]

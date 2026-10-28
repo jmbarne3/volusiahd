@@ -11,12 +11,12 @@ Two steps today.
 **Migrate**, which is what used to be here on its own.
 
 **Load the baseline taxonomy** from `directory/fixtures/taxonomy.json` — the
-thirteen headings, the four tag questions and the twenty-seven tags that are their
-answers. The point is that an empty database comes up usable rather than coming
-up as a site with no headings on the filter bar and a registration form that
-offers nothing. It is safe to repeat: `loaddata` inserts rows that are missing
-and updates rows it already matches, and never deletes anything, so no program,
-submission or user is touched by this.
+thirteen headings, the four tag questions and their answers, and each heading's
+suggested tags: 112 tags in all. The point is that an empty database comes up
+usable rather than coming up as a site with no headings on the filter bar and a
+registration form that offers nothing. It is safe to repeat: `loaddata` inserts
+rows that are missing and updates rows it already matches, and never deletes
+anything, so no program, submission or user is touched by this.
 
 One consequence worth knowing, because it is the whole trade this design makes.
 **The fixture is the source of truth for the rows in it.** Rename a heading in
