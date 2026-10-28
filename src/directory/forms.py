@@ -174,6 +174,11 @@ class ProgramRegistrationForm(BaseSubmissionForm):
     a complete record rather than starting a conversation.
     """
 
+    # Required wherever they're asked, including the ones `clean()` enforces
+    # per heading. The form marks them all with an asterisk, and the paged
+    # form checks the visible ones before moving to the next page (#21).
+    also_required = q.REQUIRED
+
     is_authorized = forms.BooleanField(
         required=True,
         label="I run this program, or I am authorized to list it",

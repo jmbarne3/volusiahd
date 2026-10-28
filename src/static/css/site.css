@@ -220,6 +220,7 @@ a:hover { color: var(--accent-hover); }
 .site-header,
 .panel,
 .callout,
+.form-page,
 .program-card,
 .program-aside,
 .search,
@@ -1136,6 +1137,78 @@ fieldset[hidden],
 }
 .form-actions .hint { margin: var(--s-3) 0 0; }
 
+/* --- The registration form, one page at a time (#21) ---------------------
+   register-form.js adds `.is-paged` and the Back / Next buttons and progress
+   bar. Without it the pages stack, each in its own panel.
+
+   Each page is a glass panel like the home page's callout, but not `.callout`
+   itself: that greys every paragraph inside it, error messages included. The
+   panel's edge does the job of the first fieldset's divider, so that one
+   goes. */
+.form-page {
+  border-radius: var(--radius-lg);
+  padding: var(--s-6);
+  margin-top: var(--s-6);
+}
+.form-page + .form-page { margin-top: var(--s-5); }
+.form-page:focus { outline: none; }
+/* The legend sits in the top edge, so the padding is the gap between the
+   legend and what follows it. A hint under the legend brings its own gap. */
+.form-long .form-page fieldset:first-of-type {
+  border-top: 0;
+  box-shadow: none;
+  margin-top: 0;
+  padding-top: var(--s-3);
+}
+.form-long .form-page fieldset:first-of-type legend + .hint { margin-top: 0; }
+/* Below a panel, the buttons need no divider of their own. */
+.form-long.is-paged .form-actions {
+  border-top: 0;
+  box-shadow: none;
+  padding-top: 0;
+  margin-top: var(--s-5);
+}
+@media (max-width: 36rem) {
+  .form-page { padding: var(--s-5) var(--s-4); }
+}
+
+/* Each of these sets a `display`, which beats the browser's own rule for
+   [hidden], so it has to be said again. */
+.form-page[hidden],
+.form-actions button[hidden],
+.form-actions .hint[hidden] { display: none; }
+
+.is-paged .form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+}
+/* Next or Register sits on the right whether or not Back is there. */
+.is-paged .form-actions [data-form-submit],
+.is-paged .form-actions button:not(.button-quiet) { margin-left: auto; }
+.is-paged .form-actions .hint { flex-basis: 100%; text-align: right; margin: 0; }
+
+.form-progress { flex-basis: 100%; margin-top: var(--s-4); }
+.form-progress__status { margin: 0 0 var(--s-2); color: var(--muted); font-size: .9rem; }
+.form-progress__steps {
+  display: flex;
+  gap: var(--s-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.form-progress__steps li {
+  flex: 1;
+  height: .35rem;
+  border-radius: var(--radius-pill);
+  /* Faded from the theme's own colours, so both themes get a visible track
+     and the finished steps keep the accent's hue. */
+  background: color-mix(in srgb, var(--muted) 25%, transparent);
+}
+.form-progress__steps li.is-done { background: color-mix(in srgb, var(--accent) 45%, transparent); }
+.form-progress__steps li.is-current { background: var(--accent); }
+
 /* --- Fallbacks -----------------------------------------------------------
    Translucency is the first thing to give up, and it has to be given up in
    two cases: a browser that cannot blur, and a reader who has asked their
@@ -1143,13 +1216,13 @@ fieldset[hidden],
    border — the layout never depended on the blur. */
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .site-header, .panel, .callout, .program-card, .program-aside, .search,
+  .site-header, .panel, .callout, .form-page, .program-card, .program-aside, .search,
   .theme-switch, .filters a, .categories a, .flash, .field input,
   .field select, .field textarea { background-color: var(--pane-solid); }
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .site-header, .panel, .callout, .program-card, .program-aside, .search,
+  .site-header, .panel, .callout, .form-page, .program-card, .program-aside, .search,
   .theme-switch, .filters a, .categories a, .flash, .field input,
   .field select, .field textarea {
     /* background-color, not background: the select's arrow is a background

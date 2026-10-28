@@ -47,10 +47,18 @@ def field(bound_field, is_answer=False):
     `is_answer` marks a row as the answers to a tag question, which the
     registration form's script needs to know: those rows hide themselves when
     every answer inside them has been narrowed away, and no other row does.
+
+    `is_required` covers a form's `also_required` as well as the fields Django
+    already requires. On the registration form some, like grade levels, are
+    only required for the headings that ask them, so they can't be marked
+    `required` up front. The paged form checks them before moving on (#21),
+    and only while they're shown.
     """
     widget = bound_field.field.widget
     return {
         "field": bound_field,
+        "is_required": bound_field.field.required
+        or bound_field.name in getattr(bound_field.form, "also_required", ()),
         "is_checkbox": isinstance(widget, forms.CheckboxInput),
         # A group of radios or checkboxes has no single input for a <label for>
         # to point at, so it gets a heading of its own instead.

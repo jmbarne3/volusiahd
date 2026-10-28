@@ -8,10 +8,13 @@ visible on the public site.
 
 import importlib
 import json
+import logging
 import math
 import os
+import re
 import shutil
 import tempfile
+import unittest
 from contextlib import contextmanager
 from io import BytesIO, StringIO
 from pathlib import Path
@@ -3246,6 +3249,131 @@ class SearchSynonymTests(TestCase):
         self.client.force_login(user)
         response = self.client.get(reverse("admin:directory_searchsynonym_changelist"))
         self.assertContains(response, "theater, theatre")
+
+
+class PagedRegistrationFormTests(TestCase):
+    """The registration form is grouped into the six pages the PO approved (#21).
+
+    The paging itself is register-form.js; these check what it works from.
+    """
+
+    PAGES = {
+        "The basics": ["The basics"],
+        "Specifics and tags": ["A few specifics", "Tags"],
+        "Who teaches and who it is for": ["Who teaches, and what you teach", "Who it is for"],
+        "Where and when you meet": ["Where you meet", "When you meet"],
+        "Enrolling and cost": ["Enrolling", "What it costs", "Step Up For Students"],
+        "Contact and about you": ["How families reach you", "Your logo", "About you"],
+    }
+
+    def _pages(self):
+        html = self.client.get(reverse("directory:register")).content.decode()
+        sections = re.findall(
+            r'<section class="form-page" data-form-page data-title="([^"]+)">(.*?)</section>',
+            html,
+            re.S,
+        )
+        return {title: re.findall(r"<legend>(.*?)</legend>", body) for title, body in sections}
+
+    def test_the_pages_and_their_fieldsets_are_in_order(self):
+        Category.objects.create(name="Sports", slug=q.SPORTS)
+        TagGroup.objects.create(name="Ability", slug="ability").tags.create(
+            name="Beginner", slug="beginner"
+        ).categories.add(Category.objects.get(slug=q.SPORTS))
+        self.assertEqual(self._pages(), self.PAGES)
+
+    def test_category_is_on_the_first_page(self):
+        html = self.client.get(reverse("directory:register")).content.decode()
+        first = html.split('data-title="Specifics and tags"')[0]
+        self.assertIn('name="category"', first)
+
+    def test_the_submit_button_is_marked_for_the_script(self):
+        response = self.client.get(reverse("directory:register"))
+        self.assertContains(response, '<button type="submit" data-form-submit>')
+        self.assertContains(response, "data-form-submit-hint")
+
+    def _required_rows(self, url):
+        html = self.client.get(url).content.decode()
+        return set(
+            re.findall(r'<div class="field[^"]*"[^>]*data-required>\s*.*?name="(\w+)', html, re.S)
+        )
+
+    def test_fields_required_per_heading_are_marked_too(self):
+        """Grade levels and locations are required where they're asked, which
+        `clean()` enforces, so the page check and the asterisk need them marked."""
+        required = self._required_rows(reverse("directory:register"))
+        self.assertLessEqual({"program_name", "grade_levels", "submitter_email"}, required)
+        self.assertNotIn("host_name", required)
+
+    def test_the_referral_form_keeps_its_own_required_fields(self):
+        """It shares the field template, not the registration form's list."""
+        from .forms import ProgramReferralForm
+
+        required = self._required_rows(reverse("directory:refer"))
+        expected = {name for name, field in ProgramReferralForm().fields.items() if field.required}
+        self.assertEqual(required, expected - {"website_url"})
+
+
+class QuietTestRunnerTests(SimpleTestCase):
+    """A test's log is shown when it fails and kept quiet when it passes (#26)."""
+
+    def setUp(self):
+        from volusiahd.test_runner import _capture
+
+        self.logger = logging.getLogger("quiet-runner-check")
+        self.logger.propagate = False
+        self.logger.addHandler(_capture)
+        self.addCleanup(self.logger.removeHandler, _capture)
+
+    def _run(self, body):
+        from volusiahd.test_runner import LogCapturingResult
+
+        class Inner(unittest.TestCase):
+            def test_it(inner):
+                body(inner)
+
+        stream = StringIO()
+        result = LogCapturingResult(stream, True, 0)
+        Inner("test_it").run(result)
+        return result, stream.getvalue()
+
+    def test_a_failure_carries_what_it_logged(self):
+        def body(test):
+            self.logger.warning("The geocoder is down")
+            test.fail("boom")
+
+        result, _ = self._run(body)
+        self.assertIn("WARNING quiet-runner-check: The geocoder is down", result.failures[0][1])
+
+    def test_an_error_carries_what_it_logged(self):
+        def body(test):
+            self.logger.warning("Refused admin access")
+            raise RuntimeError("broken")
+
+        result, _ = self._run(body)
+        self.assertIn("Refused admin access", result.errors[0][1])
+
+    def test_a_failing_subtest_carries_what_it_logged(self):
+        def body(test):
+            with test.subTest(term="teens"):
+                self.logger.warning("Searched for teens")
+                test.fail("wrong programs")
+
+        result, _ = self._run(body)
+        self.assertIn("Searched for teens", result.failures[0][1])
+
+    def test_a_pass_prints_nothing(self):
+        def body(test):
+            self.logger.warning("Forbidden (Permission denied)")
+
+        result, output = self._run(body)
+        self.assertTrue(result.wasSuccessful())
+        self.assertEqual(output, "")
+
+    def test_a_log_does_not_leak_into_the_next_test(self):
+        self._run(lambda test: self.logger.warning("From the first test"))
+        result, _ = self._run(lambda test: test.fail("second"))
+        self.assertNotIn("From the first test", result.failures[0][1])
 
 
 class VirtualOptionsFilterTests(TestCase):

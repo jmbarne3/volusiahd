@@ -146,8 +146,226 @@
       });
     }
 
-    category.addEventListener("change", refresh);
+    var pager = paginate(form, category);
+
+    category.addEventListener("change", function () {
+      refresh();
+      if (pager) pager.update();
+    });
     refresh();
+    if (pager) pager.start();
+  }
+
+  /* ---------------------------------------------------------------------
+   * One page at a time (#21).
+   *
+   * The template groups the fieldsets into `data-form-page` sections. This
+   * shows one, with Back and Next under it and a progress bar under those.
+   * It's still one <form> and one POST at the end; nothing is sent between
+   * pages. Without this script the sections stack and the whole form shows.
+   *
+   * A page whose every fieldset the narrowing above has hidden is skipped, and
+   * the step count leaves it out. Next checks the page's required fields
+   * first, but only the ones on screen: the server checks everything again on
+   * submit, and if it finds a problem the form opens on that page.
+   * ------------------------------------------------------------------- */
+
+  function paginate(form, category) {
+    var pages = Array.prototype.slice.call(form.querySelectorAll("[data-form-page]"));
+    var submit = form.querySelector("[data-form-submit]");
+    var submitHint = form.querySelector("[data-form-submit-hint]");
+    if (pages.length < 2 || !submit) return null;
+
+    form.classList.add("is-paged");
+
+    var back = button("Back", "button-quiet");
+    var next = button("Next", "");
+    submit.parentNode.insertBefore(back, submit);
+    submit.parentNode.insertBefore(next, submit);
+
+    var progress = document.createElement("div");
+    progress.className = "form-progress";
+    var status = document.createElement("p");
+    status.className = "form-progress__status";
+    status.setAttribute("aria-live", "polite");
+    var steps = document.createElement("ol");
+    steps.className = "form-progress__steps";
+    steps.setAttribute("aria-hidden", "true");
+    progress.appendChild(status);
+    progress.appendChild(steps);
+    submit.parentNode.appendChild(progress);
+
+    pages.forEach(function (page) {
+      page.setAttribute("tabindex", "-1");
+      page.setAttribute("aria-label", page.dataset.title || "");
+    });
+
+    var current = pages[0];
+
+    function button(text, className) {
+      var element = document.createElement("button");
+      element.type = "button";
+      element.textContent = text;
+      if (className) element.className = className;
+      return element;
+    }
+
+    function inUse(page) {
+      return Array.prototype.some.call(page.querySelectorAll("fieldset"), function (fieldset) {
+        return !fieldset.hidden;
+      });
+    }
+
+    function shownPages() {
+      return pages.filter(inUse);
+    }
+
+    function render() {
+      var shown = shownPages();
+      if (shown.indexOf(current) === -1) current = shown[0] || pages[0];
+      var index = shown.indexOf(current);
+      var last = index === shown.length - 1;
+
+      pages.forEach(function (page) {
+        page.hidden = page !== current;
+      });
+      back.hidden = index === 0;
+      next.hidden = last;
+      submit.hidden = !last;
+      if (submitHint) submitHint.hidden = !last;
+
+      status.textContent =
+        "Step " + (index + 1) + " of " + shown.length + ": " + (current.dataset.title || "");
+      steps.textContent = "";
+      shown.forEach(function (page, position) {
+        var step = document.createElement("li");
+        if (position < index) step.className = "is-done";
+        if (position === index) step.className = "is-current";
+        steps.appendChild(step);
+      });
+    }
+
+    function show(page, options) {
+      current = page;
+      render();
+      if (options && options.history) {
+        history.pushState({ formPage: pages.indexOf(page) }, "");
+      }
+      if (options && options.focus) {
+        current.focus({ preventScroll: true });
+        current.scrollIntoView({ block: "start" });
+      }
+    }
+
+    /* --- Checking a page before leaving it -------------------------------- */
+
+    function answered(field) {
+      var inputs = field.querySelectorAll("input, select, textarea");
+      return Array.prototype.some.call(inputs, function (input) {
+        if (input.type === "checkbox" || input.type === "radio") return input.checked;
+        if (input.tagName === "SELECT") {
+          return Array.prototype.some.call(input.selectedOptions, function (option) {
+            return option.value !== "";
+          });
+        }
+        return input.value.trim() !== "";
+      });
+    }
+
+    function clearProblems() {
+      form.querySelectorAll("[data-client-error]").forEach(function (message) {
+        var field = message.closest(".field");
+        if (field) field.classList.remove("has-error");
+        message.remove();
+      });
+    }
+
+    function flag(field, text) {
+      var message = document.createElement("p");
+      message.className = "field-error";
+      message.setAttribute("data-client-error", "");
+      message.textContent = text;
+      field.insertBefore(message, field.firstChild);
+      field.classList.add("has-error");
+    }
+
+    function problemsOn(page) {
+      var problems = [];
+      if (page.contains(category) && !category.value) {
+        problems.push({
+          field: category.closest(".field"),
+          text: "Choose the kind of program first. The rest of the form depends on it."
+        });
+      }
+      page.querySelectorAll(".field[data-required]").forEach(function (field) {
+        if (field.hidden || field.closest("fieldset[hidden]") || field.contains(category)) return;
+        if (!answered(field)) problems.push({ field: field, text: "This field is required." });
+      });
+      return problems;
+    }
+
+    function check(page) {
+      clearProblems();
+      var problems = problemsOn(page);
+      problems.forEach(function (problem) {
+        if (problem.field) flag(problem.field, problem.text);
+      });
+      if (problems.length && problems[0].field) {
+        var first = problems[0].field.querySelector("input:not([type=hidden]), select, textarea");
+        problems[0].field.scrollIntoView({ block: "center" });
+        if (first) first.focus({ preventScroll: true });
+      }
+      return problems.length === 0;
+    }
+
+    function step(by) {
+      var shown = shownPages();
+      var target = shown[shown.indexOf(current) + by];
+      if (!target) return;
+      if (by > 0 && !check(current)) return;
+      clearProblems();
+      show(target, { history: true, focus: true });
+    }
+
+    back.addEventListener("click", function () {
+      step(-1);
+    });
+    next.addEventListener("click", function () {
+      step(1);
+    });
+
+    // Enter in a text box submits a form. Before the last page that should
+    // mean Next, not sending half a registration.
+    form.addEventListener("submit", function (event) {
+      var shown = shownPages();
+      if (current !== shown[shown.length - 1]) {
+        event.preventDefault();
+        step(1);
+      } else if (!check(current)) {
+        event.preventDefault();
+      }
+    });
+
+    // The browser's Back button moves between pages rather than leaving the
+    // form and losing everything typed into it.
+    window.addEventListener("popstate", function (event) {
+      var index = event.state && event.state.formPage;
+      if (typeof index === "number" && pages[index]) show(pages[index], { focus: true });
+    });
+
+    return {
+      update: render,
+      start: function () {
+        // A form the server sent back opens on the first page with a problem.
+        var withError = pages.filter(function (page) {
+          return page.querySelector(".has-error, .field-error");
+        })[0];
+        current = withError || pages[0];
+        render();
+        history.replaceState({ formPage: pages.indexOf(current) }, "");
+        if (withError) withError.scrollIntoView({ block: "start" });
+      }
+    };
   }
 
   if (document.readyState === "loading") {

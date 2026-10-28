@@ -211,6 +211,9 @@ else:
 
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="noreply@localhost")
 
+# Tests that log on purpose keep it to themselves unless they fail (#26).
+TEST_RUNNER = "volusiahd.test_runner.QuietTestRunner"
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
