@@ -657,6 +657,9 @@ class ProgramReferralForm(BaseSubmissionForm):
         self.fields[
             "locations"
         ].help_text = "A city is plenty. Start typing and pick the match, or type it and press +."
+        # The shared hint says the heading decides which questions follow. That's
+        # the registration form; this one asks the same questions whatever it is.
+        self.fields["category"].help_text = "The one heading that fits best, if you know it."
 
     def save(self, commit=True):
         self.instance.kind = Submission.Kind.REFERRAL

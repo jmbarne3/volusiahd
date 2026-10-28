@@ -21,16 +21,18 @@
   {% csrf_token %}
   {{ form.website_url }}
   {% if form.non_field_errors %}<div class="flash error">{{ form.non_field_errors }}</div>{% endif %}
-  {% field form.program_name %}
-  {% field form.website %}
-  {% field form.facebook %}
-  {% field form.email %}
-  {% field form.phone %}
-  {% field form.locations %}
-  {% field form.category %}
-  {% field form.description %}
-  {% field form.submitter_name %}
-  {% field form.submitter_email %}
+  <div class="form-panel">
+    {% field form.program_name %}
+    {% field form.website %}
+    {% field form.facebook %}
+    {% field form.email %}
+    {% field form.phone %}
+    {% field form.locations %}
+    {% field form.category %}
+    {% field form.description %}
+    {% field form.submitter_name %}
+    {% field form.submitter_email %}
+  </div>
   <div class="form-actions">
     <button type="submit">Send suggestion</button>
   </div>

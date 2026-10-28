@@ -55,7 +55,7 @@ sections simply stack and the whole form shows, as it always has.
     <div class="flash error">{{ form.non_field_errors }}</div>
   {% endif %}
 
-  <section class="form-page" data-form-page data-title="The basics">
+  <section class="form-page form-panel" data-form-page data-title="The basics">
     <fieldset>
       <legend>The basics</legend>
       {% field form.category %}
@@ -66,7 +66,7 @@ sections simply stack and the whole form shows, as it always has.
     </fieldset>
   </section>
 
-  <section class="form-page" data-form-page data-title="Specifics and tags">
+  <section class="form-page form-panel" data-form-page data-title="Specifics and tags">
     {% if form.question_fields %}
       <fieldset>
         <legend>A few specifics</legend>
@@ -82,7 +82,7 @@ sections simply stack and the whole form shows, as it always has.
     </fieldset>
   </section>
 
-  <section class="form-page" data-form-page data-title="Who teaches and who it is for">
+  <section class="form-page form-panel" data-form-page data-title="Who teaches and who it is for">
     <fieldset>
       <legend>Who teaches, and what you teach</legend>
       {% field form.class_names %}
@@ -95,7 +95,7 @@ sections simply stack and the whole form shows, as it always has.
     </fieldset>
   </section>
 
-  <section class="form-page" data-form-page data-title="Where and when you meet">
+  <section class="form-page form-panel" data-form-page data-title="Where and when you meet">
     <fieldset>
       <legend>Where you meet</legend>
       <p class="hint">Add every place you meet. Pick the match from the list so that families searching near them can find you — and if the place you mean is not on the list, type it and press + anyway.</p>
@@ -116,7 +116,7 @@ sections simply stack and the whole form shows, as it always has.
     </fieldset>
   </section>
 
-  <section class="form-page" data-form-page data-title="Enrolling and cost">
+  <section class="form-page form-panel" data-form-page data-title="Enrolling and cost">
     <fieldset>
       <legend>Enrolling</legend>
       {% field form.enrollment_opens %}
@@ -137,7 +137,7 @@ sections simply stack and the whole form shows, as it always has.
     </fieldset>
   </section>
 
-  <section class="form-page" data-form-page data-title="Contact and about you">
+  <section class="form-page form-panel" data-form-page data-title="Contact and about you">
     <fieldset>
       <legend>How families reach you</legend>
       <p class="hint">At least one of these is required.</p>

@@ -3269,7 +3269,8 @@ class PagedRegistrationFormTests(TestCase):
     def _pages(self):
         html = self.client.get(reverse("directory:register")).content.decode()
         sections = re.findall(
-            r'<section class="form-page" data-form-page data-title="([^"]+)">(.*?)</section>',
+            r'<section class="form-page form-panel" data-form-page '
+            r'data-title="([^"]+)">(.*?)</section>',
             html,
             re.S,
         )
@@ -3304,6 +3305,15 @@ class PagedRegistrationFormTests(TestCase):
         required = self._required_rows(reverse("directory:register"))
         self.assertLessEqual({"program_name", "grade_levels", "submitter_email"}, required)
         self.assertNotIn("host_name", required)
+
+    def test_the_referral_category_hint_does_not_promise_questions(self):
+        """Only the registration form changes its questions by heading."""
+        from .forms import ProgramReferralForm, ProgramRegistrationForm
+
+        referral = str(ProgramReferralForm().fields["category"].help_text)
+        self.assertEqual(referral, "The one heading that fits best, if you know it.")
+        registration = str(ProgramRegistrationForm().fields["category"].help_text)
+        self.assertIn("questions below", registration)
 
     def test_the_referral_form_keeps_its_own_required_fields(self):
         """It shares the field template, not the registration form's list."""

@@ -220,7 +220,7 @@ a:hover { color: var(--accent-hover); }
 .site-header,
 .panel,
 .callout,
-.form-page,
+.form-panel,
 .program-card,
 .program-aside,
 .search,
@@ -1128,28 +1128,37 @@ fieldset[hidden],
 .has-error :is(input, select, textarea) { border-color: var(--danger-line); }
 .field-error { color: var(--danger); font-size: .9rem; margin: 0 0 var(--s-2); }
 
-.form-actions { margin-top: var(--s-6); }
-.form-long .form-actions {
-  border-top: 1px solid var(--hairline);
-  box-shadow: 0 -1px 0 var(--edge);
-  padding-top: var(--s-5);
-  margin-top: var(--s-7);
+/* Form buttons sit on the right, with any note under them, on every public
+   form. On the paged registration form, Back takes the left. */
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s-3);
+  margin-top: var(--s-6);
 }
-.form-actions .hint { margin: var(--s-3) 0 0; }
+/* Below a panel, the buttons need no divider of their own. */
+.form-long .form-actions { margin-top: var(--s-5); }
+.form-actions .hint { flex-basis: 100%; text-align: right; margin: 0; }
 
-/* --- The registration form, one page at a time (#21) ---------------------
-   register-form.js adds `.is-paged` and the Back / Next buttons and progress
-   bar. Without it the pages stack, each in its own panel.
-
-   Each page is a glass panel like the home page's callout, but not `.callout`
-   itself: that greys every paragraph inside it, error messages included. The
-   panel's edge does the job of the first fieldset's divider, so that one
-   goes. */
-.form-page {
+/* --- A form's questions in a panel ----------------------------------------
+   The same glass as the home page's callout, but not `.callout` itself: that
+   greys every paragraph inside it, error messages included. Used for each
+   page of the registration form and for the whole suggestion form. */
+.form-panel {
   border-radius: var(--radius-lg);
   padding: var(--s-6);
   margin-top: var(--s-6);
 }
+@media (max-width: 36rem) {
+  .form-panel { padding: var(--s-5) var(--s-4); }
+}
+
+/* --- The registration form, one page at a time (#21) ---------------------
+   register-form.js adds `.is-paged` and the Back / Next buttons and progress
+   bar. Without it the pages stack, each in its own panel. The panel's edge
+   does the job of the first fieldset's divider, so that one goes. */
 .form-page + .form-page { margin-top: var(--s-5); }
 .form-page:focus { outline: none; }
 /* The legend sits in the top edge, so the padding is the gap between the
@@ -1161,33 +1170,14 @@ fieldset[hidden],
   padding-top: var(--s-3);
 }
 .form-long .form-page fieldset:first-of-type legend + .hint { margin-top: 0; }
-/* Below a panel, the buttons need no divider of their own. */
-.form-long.is-paged .form-actions {
-  border-top: 0;
-  box-shadow: none;
-  padding-top: 0;
-  margin-top: var(--s-5);
-}
-@media (max-width: 36rem) {
-  .form-page { padding: var(--s-5) var(--s-4); }
-}
-
 /* Each of these sets a `display`, which beats the browser's own rule for
    [hidden], so it has to be said again. */
 .form-page[hidden],
 .form-actions button[hidden],
 .form-actions .hint[hidden] { display: none; }
 
-.is-paged .form-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s-3);
-}
-/* Next or Register sits on the right whether or not Back is there. */
-.is-paged .form-actions [data-form-submit],
+/* Next or Register stays on the right whether or not Back is there. */
 .is-paged .form-actions button:not(.button-quiet) { margin-left: auto; }
-.is-paged .form-actions .hint { flex-basis: 100%; text-align: right; margin: 0; }
 
 .form-progress { flex-basis: 100%; margin-top: var(--s-4); }
 .form-progress__status { margin: 0 0 var(--s-2); color: var(--muted); font-size: .9rem; }
@@ -1216,13 +1206,13 @@ fieldset[hidden],
    border — the layout never depended on the blur. */
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .site-header, .panel, .callout, .form-page, .program-card, .program-aside, .search,
+  .site-header, .panel, .callout, .form-panel, .program-card, .program-aside, .search,
   .theme-switch, .filters a, .categories a, .flash, .field input,
   .field select, .field textarea { background-color: var(--pane-solid); }
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .site-header, .panel, .callout, .form-page, .program-card, .program-aside, .search,
+  .site-header, .panel, .callout, .form-panel, .program-card, .program-aside, .search,
   .theme-switch, .filters a, .categories a, .flash, .field input,
   .field select, .field textarea {
     /* background-color, not background: the select's arrow is a background
