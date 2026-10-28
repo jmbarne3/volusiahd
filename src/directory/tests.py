@@ -27,6 +27,7 @@ from django.apps import apps as django_apps
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.staticfiles import finders
+from django.core import mail
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -763,6 +764,80 @@ class ReferralTests(TestCase):
     def test_honeypot_rejects_bots(self):
         self.client.post(reverse("directory:refer"), self._payload(website_url="http://spam"))
         self.assertEqual(Submission.objects.count(), 0)
+
+
+@override_settings(
+    NOTIFICATION_EMAILS=["owner@example.org", "helper@example.org"],
+    SITE_BASE_URL="https://directory.example.org",
+)
+class SubmissionNotificationTests(TestCase):
+    """The owners hear about every registration and suggestion (#28)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.category = Category.objects.create(name="Co-ops", slug="co-ops")
+
+    def _register(self, **overrides):
+        payload = RegistrationTests._payload(self, **overrides)
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.client.post(reverse("directory:register"), payload)
+
+    def _suggest(self, **overrides):
+        payload = ReferralTests._payload(self, **overrides)
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.client.post(reverse("directory:refer"), payload)
+
+    def test_a_registration_emails_the_owners(self):
+        self._register()
+        submission = Submission.objects.get()
+        [email] = mail.outbox
+        self.assertEqual(email.subject, "New registration: Coastal Co-op")
+        self.assertEqual(email.to, ["owner@example.org", "helper@example.org"])
+        self.assertIn("Category:  Co-ops", email.body)
+        self.assertIn("Dana Reed <dana@coastal.example.org>", email.body)
+        self.assertIn(
+            f"https://directory.example.org/admin/directory/submission/{submission.pk}/change/",
+            email.body,
+        )
+
+    def test_a_suggestion_emails_the_owners(self):
+        self._suggest()
+        [email] = mail.outbox
+        self.assertEqual(email.subject, "New suggestion: Surf Lessons")
+        self.assertIn("No category chosen", email.body)
+        self.assertIn("Jane <jane@example.com>", email.body)
+
+    def test_a_form_with_errors_sends_nothing(self):
+        self._register(program_name="")
+        self.assertEqual(Submission.objects.count(), 0)
+        self.assertEqual(mail.outbox, [])
+
+    def test_the_honeypot_sends_nothing(self):
+        self._suggest(website_url="http://spam")
+        self.assertEqual(mail.outbox, [])
+
+    @override_settings(NOTIFICATION_EMAILS=[])
+    def test_no_recipients_means_no_email(self):
+        self._register()
+        self.assertEqual(Submission.objects.count(), 1)
+        self.assertEqual(mail.outbox, [])
+
+    def test_a_failed_send_still_thanks_the_visitor(self):
+        """Resend being down is ours to notice in the logs, not theirs."""
+        with (
+            patch("directory.notifications.send_mail", side_effect=OSError("down")),
+            self.assertLogs("directory.notifications", "ERROR") as logged,
+        ):
+            response = self._register()
+        self.assertRedirects(response, reverse("directory:register_thanks"))
+        self.assertEqual(Submission.objects.count(), 1)
+        self.assertIn("New registration: Coastal Co-op", logged.output[0])
+
+    def test_the_email_waits_for_the_save_to_commit(self):
+        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+            self.client.post(reverse("directory:register"), RegistrationTests._payload(self))
+        self.assertEqual(mail.outbox, [])
+        self.assertEqual(len(callbacks), 1)
 
 
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp(prefix="hsd-test-media-"))

@@ -208,8 +208,16 @@ else:
     EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="resend")
     EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
     EMAIL_USE_TLS = True
+    # A notification is sent while the visitor waits for the thank-you page, so
+    # a stuck connection gives up rather than hanging the request.
+    EMAIL_TIMEOUT = 10
 
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="noreply@localhost")
+
+# Who is emailed about new registrations, suggestions and tag suggestions, comma
+# separated. Set it with `fly secrets set`, never in fly.toml: the repository
+# is public. Empty sends nothing. See directory/notifications.py.
+NOTIFICATION_EMAILS = env.list("NOTIFICATION_EMAILS", default=[])
 
 # Tests that log on purpose keep it to themselves unless they fail (#26).
 TEST_RUNNER = "volusiahd.test_runner.QuietTestRunner"

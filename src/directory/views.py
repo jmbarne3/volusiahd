@@ -7,7 +7,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET
 
-from . import geocoding
+from . import geocoding, notifications
 from . import questions as q
 from .addresses import DEBOUNCE_MS, MIN_QUERY_CHARS, parse_coordinate
 from .forms import ProgramReferralForm, ProgramRegistrationForm
@@ -429,7 +429,7 @@ def register_program(request):
     if request.method == "POST":
         form = ProgramRegistrationForm(request.POST, request.FILES)
         if form.is_valid():
-            form.save()
+            notifications.submission_received(form.save())
             return redirect("directory:register_thanks")
     else:
         form = ProgramRegistrationForm()
@@ -445,7 +445,7 @@ def refer_program(request):
     if request.method == "POST":
         form = ProgramReferralForm(request.POST)
         if form.is_valid():
-            form.save()
+            notifications.submission_received(form.save())
             return redirect("directory:refer_thanks")
     else:
         form = ProgramReferralForm()
