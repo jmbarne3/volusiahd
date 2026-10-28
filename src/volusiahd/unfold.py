@@ -61,6 +61,11 @@ UNFOLD = {
                         "link": reverse_lazy("admin:directory_tag_changelist"),
                     },
                     {
+                        "title": _("Search synonyms"),
+                        "icon": "swap_horiz",
+                        "link": reverse_lazy("admin:directory_searchsynonym_changelist"),
+                    },
+                    {
                         "title": _("Pages"),
                         "icon": "article",
                         "link": reverse_lazy("admin:directory_page_changelist"),

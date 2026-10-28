@@ -20,6 +20,7 @@ from .models import (
     Category,
     Page,
     Program,
+    SearchSynonym,
     Tag,
 )
 
@@ -77,8 +78,22 @@ def _search_words(query):
     return [w for w in words if w not in SEARCH_FILLER_WORDS] or words
 
 
-def _matches_word(word):
-    """Everywhere one search word can turn up — and, for a grade term, the levels
+def _matches_word(word, synonyms=None):
+    """Everywhere one search word can turn up, under any of its synonyms.
+
+    The synonyms are alternatives inside this one word's match, so "theatre"
+    finds a program that wrote "theater". They add no joins: every spelling is
+    checked against the same rows.
+    """
+    alternatives = (synonyms or {}).get(word, (word,))
+    match = Q()
+    for alternative in alternatives:
+        match |= _matches_one_spelling(alternative)
+    return match
+
+
+def _matches_one_spelling(word):
+    """Everywhere one spelling can turn up — and, for a grade term, the levels
     it means. A program with no levels ticked is not matched by a grade term:
     the sidebar shows those under every level so they are never hidden, but a
     search for "teens" should return programs that said they take teens."""
@@ -206,8 +221,10 @@ def _narrow(request, programs, *, offers_virtual=True):
     # Lego club whose address is in Deltona. One filter per word, rather than
     # one Q, so each word gets its own join and can match a different tag or
     # location from the others.
-    for word in _search_words(chosen["q"]):
-        programs = programs.filter(_matches_word(word))
+    words = _search_words(chosen["q"])
+    synonyms = SearchSynonym.lookup() if words else {}
+    for word in words:
+        programs = programs.filter(_matches_word(word, synonyms))
 
     programs = (
         programs.meeting_on(chosen["days"])

@@ -46,6 +46,7 @@ from .models import (
     Page,
     Program,
     ProgramLocation,
+    SearchSynonym,
     SharedProgramFields,
     Submission,
     SubmissionLocation,
@@ -3153,8 +3154,11 @@ class GradeTermSearchTests(TestCase):
         about grades. Varsity Rowing never wrote it."""
         self.assertNotIn("Varsity Rowing", self._found("high"))
 
-    def test_tweens_and_teens_straddle_two_levels(self):
-        self.assertEqual(self._found("tweens"), ["Brick Builders", "Junior Debate", "Soccer Stars"])
+    def test_tweens_mean_middle_school_and_teens_straddle_two_levels(self):
+        """The PO's equivalents (#20): tweens are middle school; teens are middle
+        and high school."""
+        self.assertEqual(self._found("tweens"), ["Junior Debate"])
+        self.assertEqual(self._found("tween"), ["Junior Debate"])
         self.assertEqual(self._found("teens"), ["Junior Debate", "Varsity Rowing"])
 
     def test_the_other_words_still_have_to_match(self):
@@ -3168,6 +3172,80 @@ class GradeTermSearchTests(TestCase):
                 self.assertTrue(levels)
                 self.assertLessEqual(set(levels), codes)
                 self.assertLessEqual(len(term.split()), 2)
+
+
+class SearchSynonymTests(TestCase):
+    """Words the admin says mean the same thing are searched as one (#20)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        def program(name, **fields):
+            return Program.objects.create(
+                name=name,
+                slug=name.lower().replace(" ", "-"),
+                short_description=fields.pop("short_description", "We meet weekly."),
+                status=Program.Status.PUBLISHED,
+                **fields,
+            )
+
+        program("Stage Kids", short_description="Musical theater for all ages.")
+        program("Curtain Call", description="<p>A youth theatre company.</p>")
+        tagged = program("Spotlight Club")
+        tagged.tags.add(Tag.objects.create(name="Drama stage", slug="drama-stage"))
+        program("Chess Club")
+
+    def _found(self, query):
+        response = self.client.get(reverse("directory:program_list"), {"q": query})
+        return sorted(program.name for program in response.context["programs"])
+
+    def test_theater_and_theatre_are_seeded(self):
+        self.assertEqual(SearchSynonym.lookup()["theatre"], ("theater", "theatre"))
+
+    def test_either_spelling_finds_both(self):
+        self.assertEqual(self._found("theater"), ["Curtain Call", "Stage Kids"])
+        self.assertEqual(self._found("theatre"), ["Curtain Call", "Stage Kids"])
+
+    def test_a_group_added_in_the_admin_reaches_tags(self):
+        SearchSynonym.objects.create(words="drama, acting")
+        self.assertEqual(self._found("acting"), ["Spotlight Club"])
+
+    def test_every_other_word_still_has_to_match(self):
+        self.assertEqual(self._found("youth theater"), ["Curtain Call"])
+        self.assertEqual(self._found("chess theatre"), [])
+
+    def test_no_synonyms_means_ordinary_search(self):
+        SearchSynonym.objects.all().delete()
+        self.assertEqual(self._found("theatre"), ["Curtain Call"])
+
+    def _cleaned(self, words):
+        group = SearchSynonym(words=words)
+        group.full_clean()
+        return group.words
+
+    def test_words_are_tidied_on_save(self):
+        self.assertEqual(self._cleaned(" Colour,color , COLOUR,"), "colour, color")
+
+    def test_a_group_needs_two_single_words(self):
+        with self.assertRaisesMessage(ValidationError, "at least two words"):
+            self._cleaned("colour, Colour")
+        with self.assertRaisesMessage(ValidationError, "single word"):
+            self._cleaned("musical theater, musicals")
+
+    def test_a_word_belongs_to_one_group(self):
+        with self.assertRaisesMessage(ValidationError, "Already in another group: theatre"):
+            self._cleaned("theatre, stage")
+
+    def test_editing_a_group_does_not_clash_with_itself(self):
+        group = SearchSynonym.objects.get(words="theater, theatre")
+        group.words = "theater, theatre, theatres"
+        group.full_clean()
+        self.assertEqual(group.words, "theater, theatre, theatres")
+
+    def test_the_admin_lists_them(self):
+        user = User.objects.create_superuser("admin", "admin@example.org", "pw")
+        self.client.force_login(user)
+        response = self.client.get(reverse("admin:directory_searchsynonym_changelist"))
+        self.assertContains(response, "theater, theatre")
 
 
 class VirtualOptionsFilterTests(TestCase):

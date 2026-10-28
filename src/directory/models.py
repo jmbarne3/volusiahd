@@ -77,8 +77,8 @@ GRADE_LEVEL_NAMES = dict(GRADE_LEVELS)
 
 # Words families search with, and the grade levels each one means. A search for
 # "elementary" finds a program that ticked Elementary even if it never wrote the
-# word. Tweens and teens are not levels of their own: they straddle the line
-# between two, so they mean both.
+# word. Teens are not a level of their own: they straddle middle and high
+# school, so they mean both. Tweens mean middle school, as the PO decided (#20).
 #
 # Two-word entries are recognised before a search is split into words. "High"
 # on its own is deliberately absent — it is in "highlights" and "high-energy" —
@@ -99,8 +99,8 @@ GRADE_SEARCH_TERMS = {
     "middleschool": ["middle"],
     "high school": ["high"],
     "highschool": ["high"],
-    "tween": ["elementary", "middle"],
-    "tweens": ["elementary", "middle"],
+    "tween": ["middle"],
+    "tweens": ["middle"],
     "teen": ["middle", "high"],
     "teens": ["middle", "high"],
     "teenager": ["middle", "high"],
@@ -1352,6 +1352,85 @@ class ContactPerson(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.role})" if self.role else self.name
+
+
+# One word as search sees it: letters, digits, hyphens and apostrophes, the
+# same pattern `_search_words` splits a search into.
+SEARCH_WORD = re.compile(r"[\w'-]+")
+
+
+class SearchSynonym(models.Model):
+    """Words that mean the same thing to search: "theater, theatre" (#20).
+
+    Searching any word in a group searches for all of them, in listing text and
+    in tags alike. A group is one row rather than a pair per direction, so
+    nobody has to enter "theatre means theater" and then the reverse.
+
+    Single words only, because search splits what is typed into single words
+    before it looks anything up. And each word sits in one group at most: a
+    word in two groups would make search mean two different things by it, and
+    nobody looking at either row would see why.
+
+    Grade terms like "tweens" are not here. They mean grade levels rather than
+    other words, and live in `GRADE_SEARCH_TERMS`.
+    """
+
+    words = models.CharField(
+        max_length=300,
+        help_text="Two or more single words that mean the same thing, separated by "
+        "commas — e.g. 'theater, theatre'. Capitals do not matter.",
+    )
+
+    class Meta:
+        ordering = ["words"]
+        verbose_name = "search synonym"
+        verbose_name_plural = "search synonyms"
+
+    def __str__(self):
+        return self.words
+
+    @staticmethod
+    def split(words):
+        """The distinct words in a group, lowercased, in the order typed."""
+        found = [word.strip().lower() for word in (words or "").split(",")]
+        return list(dict.fromkeys(word for word in found if word))
+
+    def clean(self):
+        words = self.split(self.words)
+        not_words = [word for word in words if not SEARCH_WORD.fullmatch(word)]
+        if not_words:
+            raise ValidationError(
+                {
+                    "words": "Search matches one word at a time, so each entry has to be a "
+                    f"single word. Check: {', '.join(not_words)}."
+                }
+            )
+        if len(words) < 2:
+            raise ValidationError({"words": "A group needs at least two words."})
+        taken = {
+            word
+            for other in SearchSynonym.objects.exclude(pk=self.pk)
+            for word in self.split(other.words)
+        }
+        repeated = [word for word in words if word in taken]
+        if repeated:
+            raise ValidationError(
+                {
+                    "words": f"Already in another group: {', '.join(repeated)}. "
+                    "Add the other words to that group instead."
+                }
+            )
+        self.words = ", ".join(words)
+
+    @classmethod
+    def lookup(cls):
+        """Every word in every group, mapped to its whole group."""
+        groups = {}
+        for words in cls.objects.values_list("words", flat=True):
+            group = tuple(cls.split(words))
+            for word in group:
+                groups[word] = group
+        return groups
 
 
 class Page(SanitizedRichTextMixin, models.Model):

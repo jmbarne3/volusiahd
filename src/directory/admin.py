@@ -27,6 +27,7 @@ from .models import (
     Page,
     Program,
     ProgramLocation,
+    SearchSynonym,
     Submission,
     Tag,
     TagGroup,
@@ -486,6 +487,15 @@ class PageAdmin(ModelAdmin):
     list_display = ["title", "is_published", "show_in_nav", "sort_order", "updated_at"]
     list_editable = ["is_published", "show_in_nav", "sort_order"]
     fields = ["title", "slug", "body", "is_published", "show_in_nav", "sort_order"]
+
+
+@admin.register(SearchSynonym)
+class SearchSynonymAdmin(ModelAdmin):
+    """Words search treats as the same: one row per group, "theater, theatre"."""
+
+    list_display = ["words"]
+    search_fields = ["words"]
+    fields = ["words"]
 
 
 @admin.register(Submission)
