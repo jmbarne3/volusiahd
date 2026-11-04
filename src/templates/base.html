@@ -23,6 +23,11 @@ these tags matter more than they usually would.{% endcomment %}
 <meta name="twitter:card" content="summary">
 
 <link rel="canonical" href="{{ site_base_url }}{{ request.path }}">
+<link rel="icon" type="image/png" sizes="32x32" href="{% static 'favicon-32x32.png' %}">
+<link rel="icon" type="image/png" sizes="144x144" href="{% static 'favicon-144x144.png' %}">
+<link rel="icon" type="image/png" sizes="180x180" href="{% static 'favicon-180x180.png' %}">
+<link rel="icon" type="image/png" sizes="192x192" href="{% static 'favicon-192x192.png' %}">
+<link rel="icon" type="image/png" sizes="512x512" href="{% static 'favicon-512x512.png' %}">
 {% if google_analytics_id %}
 {% comment %}Google Analytics, only when GOOGLE_ANALYTICS_ID is set.
 
