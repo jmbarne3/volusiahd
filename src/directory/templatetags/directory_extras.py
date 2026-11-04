@@ -5,6 +5,8 @@ only way to group it into fieldsets a human can read. `{% field form.x %}`
 keeps that readable without repeating the markup twenty-five times.
 """
 
+from urllib.parse import urljoin
+
 from django import forms, template
 
 register = template.Library()
@@ -38,6 +40,18 @@ def colour_code(category):
     """
     key = getattr(category, "pk", None) or 0
     return (key - 1) % CATEGORY_COLOUR_COUNT + 1
+
+
+@register.filter
+def absolute(url, base=None):
+    """Join a relative URL under the site base, without duplicating absolute URLs."""
+    if url in (None, ""):
+        return ""
+    if base is None:
+        from django.conf import settings
+
+        base = settings.SITE_BASE_URL
+    return urljoin(str(base), str(url))
 
 
 @register.inclusion_tag("directory/_field.html")

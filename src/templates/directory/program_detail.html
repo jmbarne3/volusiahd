@@ -6,7 +6,7 @@
 {% block og_type %}article{% endblock %}
 {% block og_title %}{{ program.name }}{% endblock %}
 {% block og_description %}{{ program.short_description }}{% endblock %}
-{% block og_image %}{% if program.logo %}<meta property="og:image" content="{{ site_base_url }}{{ program.logo.url }}">{% endif %}{% endblock %}
+{% block og_image %}{% if program.logo %}<meta property="og:image" content="{{ program.logo.url|absolute:site_base_url }}">{% endif %}{% endblock %}
 
 {% block content %}
 <article class="program">

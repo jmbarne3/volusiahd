@@ -102,6 +102,16 @@ class PublicSiteTests(TestCase):
             with self.subTest(url=url):
                 self.assertEqual(self.client.get(url).status_code, 200)
 
+    @override_settings(SITE_BASE_URL="https://volusiahd.org")
+    def test_og_image_uses_a_single_absolute_url_when_storage_is_already_absolute(self):
+        self.program.logo = "logos/mmlogo.jpg"
+        self.program.save(update_fields=["logo"])
+        absolute_url = "https://volusiahd-media.t3.tigrisfiles.io/logos/mmlogo.jpg"
+        with patch.object(self.program.logo.storage, "url", return_value=absolute_url):
+            response = self.client.get(reverse("directory:program", kwargs={"slug": self.program.slug}))
+        self.assertContains(response, f'content="{absolute_url}"')
+        self.assertNotContains(response, f'content="https://volusiahd.org{absolute_url}"')
+
     def test_draft_programs_are_not_public(self):
         self.assertEqual(
             self.client.get(
