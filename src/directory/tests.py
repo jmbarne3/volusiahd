@@ -752,7 +752,6 @@ class ReferralTests(TestCase):
             "program_name": "Surf Lessons",
             "website": "https://surf.example.org",
             "email": "",
-            "phone": "",
             "locations": "New Smyrna Beach",
             "description": "I think they take homeschoolers on Wednesdays.",
             "submitter_name": "Jane",
