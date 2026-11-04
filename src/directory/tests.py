@@ -109,8 +109,8 @@ class PublicSiteTests(TestCase):
         absolute_url = "https://volusiahd-media.t3.tigrisfiles.io/logos/mmlogo.jpg"
         with patch.object(self.program.logo.storage, "url", return_value=absolute_url):
             response = self.client.get(
-                reverse("directory:program",
-                        kwargs={"slug": self.program.slug}))
+                reverse("directory:program", kwargs={"slug": self.program.slug})
+            )
         self.assertContains(response, f'content="{absolute_url}"')
         self.assertNotContains(response, f'content="https://volusiahd.org{absolute_url}"')
 
