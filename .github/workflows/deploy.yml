@@ -38,7 +38,7 @@ jobs:
       name: production
       url: https://volusiahd.org
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
 
@@ -65,7 +65,7 @@ jobs:
       # Dockerfile: bump it deliberately, not by surprise on a Tuesday.
       - uses: superfly/flyctl-actions/setup-flyctl@master
         with:
-          version: 0.4.105
+          version: 0.5.5
 
       - name: Deploy
         # --remote-only builds on Fly's builders, so the runner needs no

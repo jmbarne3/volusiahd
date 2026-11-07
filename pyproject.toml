@@ -1,6 +1,6 @@
 [project]
 name = "volusiahd"
-version = "0.8.0"
+version = "0.9.0"
 description = "Volusia County Homeschool Directory"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -8,14 +8,14 @@ authors = [
     { name = "Jim Barnes", email = "james.barnes@ucf.edu" }
 ]
 dependencies = [
-    "django>=5.2,<6.0",
+    "django>=5.2.19,<6.0",
     "django-environ>=0.12",
     "django-unfold>=0.62",
     "django-prose-editor>=0.13",
     "nh3>=0.2.20",
     "whitenoise>=6.9",
     "gunicorn>=23.0",
-    "pillow>=11.0",
+    "pillow>=13.0",
     "django-storages[s3]>=1.14.6",
     "rcssmin>=1.3.0",
     "brotli>=1.2.1",
