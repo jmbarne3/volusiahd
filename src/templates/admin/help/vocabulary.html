@@ -1,0 +1,30 @@
+{% extends "admin/help/base.html" %}
+
+{% block guide %}
+<p class="lede">Categories, tags and tag questions are how families narrow down the directory. They're also how the registration form decides what to ask.</p>
+
+<div class="warning">
+  <p><strong>Read this before changing anything here.</strong> The built-in vocabulary is reset every time the site is updated. That covers the thirteen categories, the tag questions and their answers, and the built-in tags, including which tags each category suggests.</p>
+  <p>So renaming a category, editing its description, or changing which tags it suggests will work, and then quietly undo itself at the next update. To make a lasting change to any of those, ask Jim, who changes it in the code.</p>
+  <p><strong>What always lasts:</strong> new tags you create (including approved tag suggestions), programs, pages, search synonyms and submissions.</p>
+</div>
+
+<h2>Categories</h2>
+<p><a href="{% url 'admin:directory_category_changelist' %}">Categories</a> are the headings across the top of the directory — Co-ops, Sports, Tutoring and so on. Every program has exactly one. The category a registrant picks decides which questions the form asks them, and which tags it suggests.</p>
+
+<h2>Tags</h2>
+<p><a href="{% url 'admin:directory_tag_changelist' %}">Tags</a> are the finer detail: "Lego", "Spanish", "Competitive". A program can have as many as fit, and each tag has its own page listing every program that carries it.</p>
+<ul>
+  <li><strong>Creating a tag:</strong> press <span class="button-name">Add tag</span>, give it a name, and <span class="button-name">Save</span>. Leave <strong>Group</strong> empty for an ordinary tag. New tags are general — offered under every category. These last.</li>
+  <li><strong>Description:</strong> optional. It's shown at the top of the tag's page, so a sentence explaining what it means helps families.</li>
+  <li>Before creating a tag, search for one that already means the same thing. Two tags for one idea split the programs between them.</li>
+</ul>
+
+<h2>Tag questions</h2>
+<p><a href="{% url 'admin:directory_taggroup_changelist' %}">Tag questions</a> are the multiple-choice questions on the registration form, like Ability level and Parent involvement. Each answer is a tag in that question's group, so families can filter by it.</p>
+<ul>
+  <li><strong>Prompt</strong> is the hint shown under the question on the form.</li>
+  <li><strong>Allows several</strong> decides whether people tick boxes or pick one.</li>
+</ul>
+<p>These are part of the built-in vocabulary, so changes to them reset at the next update. Ask Jim for lasting changes.</p>
+{% endblock %}

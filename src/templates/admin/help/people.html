@@ -1,0 +1,17 @@
+{% extends "admin/help/base.html" %}
+
+{% block guide %}
+<p class="lede">Only people with an account here can sign in to the admin. Managing accounts needs a superuser; if you aren't one, you won't see <strong>Access</strong> in the sidebar.</p>
+
+<h2>Adding an editor</h2>
+<ol>
+  <li>Open <a href="{% url 'admin:auth_user_changelist' %}">Access → People</a> and press <span class="button-name">Add person</span>.</li>
+  <li>Enter the exact email address they use to sign in to Google, and their name. Leave <strong>Superuser</strong> unticked unless they need to manage accounts too.</li>
+  <li><span class="button-name">Save</span>, then tell them to go to the admin and press <span class="button-name">Sign in with Google</span>.</li>
+</ol>
+<p>Creating the account is what grants access. A Google address without an account here is refused.</p>
+
+<h2>Removing an editor</h2>
+<p>Open their record, untick <strong>Active</strong>, and <span class="button-name">Save</span>. It takes effect immediately, even if they're signed in right now.</p>
+<p>Deleting the "linked Google account" row under their record doesn't remove access — it only makes their next sign-in match by email again.</p>
+{% endblock %}

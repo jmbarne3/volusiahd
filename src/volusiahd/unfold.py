@@ -8,6 +8,8 @@ everything Django registers by default that she will never touch is hidden.
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 
+from directory.help.topics import TOPICS
+
 UNFOLD = {
     "SITE_TITLE": _("Homeschool Directory"),
     "SITE_HEADER": _("Volusia County Homeschool Directory"),
@@ -75,6 +77,32 @@ UNFOLD = {
                         "title": _("Pages"),
                         "icon": "article",
                         "link": reverse_lazy("admin:directory_page_changelist"),
+                    },
+                ],
+            },
+            {
+                # The editor's guide (#39), where she already works.
+                "title": _("Help"),
+                "separator": True,
+                "items": [
+                    {
+                        # A parent with sub-items opens and closes rather than
+                        # linking anywhere, so the guide's front page is the
+                        # first quick link under it. It still needs a link of
+                        # its own: Unfold drops any item without one.
+                        "title": _("Editor's guide"),
+                        "icon": "help",
+                        "link": reverse_lazy("admin:help"),
+                        "items": [
+                            {"title": _("Overview"), "link": reverse_lazy("admin:help")},
+                            *(
+                                {
+                                    "title": topic.title,
+                                    "link": reverse_lazy("admin:help_topic", args=[topic.slug]),
+                                }
+                                for topic in TOPICS
+                            ),
+                        ],
                     },
                 ],
             },

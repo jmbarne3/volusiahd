@@ -1,0 +1,21 @@
+{% extends "admin/help/base.html" %}
+
+{% block guide %}
+<p class="lede">How to look after the directory: what each screen is for, and how to do the jobs that come up every week.</p>
+
+<h2>A normal week</h2>
+<ol>
+  <li><strong>Check <a href="{% url 'admin:directory_submission_changelist' %}">Submissions</a>.</strong> The number beside it in the sidebar is how many are waiting. Each one also arrives as an email with a link straight to it. See <a href="{% url 'admin:help_topic' 'submissions' %}">New submissions</a>.</li>
+  <li><strong>Check <a href="{% url 'admin:directory_tagsuggestion_changelist' %}">Tag suggestions</a></strong> if it has a number beside it. These never hold up a program. See <a href="{% url 'admin:help_topic' 'tag-suggestions' %}">Tag suggestions</a>.</li>
+  <li><strong>Now and then, look at the "Last verified" column on <a href="{% url 'admin:directory_program_changelist' %}">Programs</a>.</strong> Dates in orange are over a year old, or have never been checked. A directory goes stale one listing at a time. See <a href="{% url 'admin:help_topic' 'programs' %}">Programs</a>.</li>
+</ol>
+
+<h2>Topics</h2>
+<ul class="topics">
+  {% for item in topics %}
+  <li><a href="{% url 'admin:help_topic' item.slug %}">{{ item.title }}</a><br>{{ item.summary }}</li>
+  {% endfor %}
+</ul>
+
+<p class="note">Something here doesn't match what you see, or a job isn't covered? Tell Jim, and the guide gets fixed along with the code.</p>
+{% endblock %}

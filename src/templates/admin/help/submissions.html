@@ -1,0 +1,47 @@
+{% extends "admin/help/base.html" %}
+
+{% block guide %}
+<p class="lede">Everything the public sends arrives in <a href="{% url 'admin:directory_submission_changelist' %}">Submissions</a>. Nothing they send appears on the site until you act on it.</p>
+
+<p>There are three kinds, shown in the <strong>Kind</strong> column:</p>
+<ul>
+  <li><strong>Registration</strong> — someone describing their own program, with the whole listing filled in.</li>
+  <li><strong>Referral</strong> — someone pointing us at a program they don't run. Usually just a name and a way to reach them.</li>
+  <li><strong>Edit</strong> — someone suggesting a change to a program that's already listed, using the "Suggest an edit" link on its page.</li>
+</ul>
+
+<p class="note">You can correct anything about the program before you act on it: a typo, the wrong category, a missing tag, an address. Change it and press <span class="button-name">Save</span> first — the Approve, Apply and Reject buttons don't save the page. Who sent it can't be changed.</p>
+
+<h2>A registration</h2>
+<ol>
+  <li>Open it. Check the <strong>category</strong> and <strong>tags</strong> — those decide where families find it.</li>
+  <li>Fix anything that's wrong, and <span class="button-name">Save</span>.</li>
+  <li>Pick one of the buttons at the top:
+    <ul>
+      <li><span class="button-name">Approve — publish the program</span> puts it on the site straight away.</li>
+      <li><span class="button-name">Approve as a draft</span> creates the program but keeps it hidden, for when you want to check something first.</li>
+      <li><span class="button-name">Reject</span> if it's spam or doesn't belong in the directory.</li>
+    </ul>
+  </li>
+</ol>
+<p>A registration with no one-line description is created as a draft even if you publish it, because a listing needs that line. Add one on the program and publish it from there.</p>
+<p>Places listed without a map pin (typed in their own words rather than picked from the list) come across as they are. Look them up afterwards — see <a href="{% url 'admin:help_topic' 'programs' %}">Programs</a>.</p>
+
+<h2>A referral</h2>
+<p>Use <span class="button-name">Approve as a draft</span>. That keeps a record of the program without publishing anything, and gives you the details to reach out and invite whoever runs it to register it properly.</p>
+
+<h2>A suggested edit</h2>
+<p>An edit opens with a <strong>Suggested changes</strong> table at the top. It lists only what the person changed, with the program's current value beside their suggestion. New words are highlighted in green, and removed words are struck through in red.</p>
+<ul>
+  <li><span class="button-name">Apply edit — update the program</span> copies those changes onto the program. Its web address, its published status and everything they didn't touch stay as they are, and it counts as verified today.</li>
+  <li><span class="button-name">Reject</span> if none of it is right.</li>
+</ul>
+<h3>Using only part of an edit</h3>
+<p>Further down, the submission shows the whole listing as they sent it. Set any field you don't want back to what the program says now, <span class="button-name">Save</span>, and that row disappears from the table. Then apply the rest.</p>
+<h3>Warnings you might see</h3>
+<ul>
+  <li><strong>"The program has been edited since this was sent."</strong> Someone changed the program after the suggestion came in. Rows marked ⚠ were changed in both places, and applying would overwrite the newer change.</li>
+  <li><strong>"Applying replaces the description…"</strong> The public form only takes plain text, so a rewritten description loses its bold, lists and links. Applying an edit that didn't touch the description keeps its formatting.</li>
+</ul>
+<p>Who sent an edit is shown under <strong>Who sent it</strong>, including whether they said they run the program. An edit from the people who run it deserves more weight than one from a parent.</p>
+{% endblock %}

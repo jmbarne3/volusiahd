@@ -1,0 +1,56 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+The editor's guide (#39). Unfold styles its own components and resets plain
+HTML to nothing, so the guide carries a small stylesheet of its own, scoped to
+`.help`. Colours inherit, so it reads the same in the light and dark themes.
+{% endcomment %}
+
+{% block extrastyle %}{{ block.super }}
+<style>
+  .help { max-width: 46rem; line-height: 1.6; font-size: 0.95rem; }
+  .help h1 { font-size: 1.6rem; font-weight: 600; margin: 0.5rem 0 1rem; }
+  .help h2 { font-size: 1.15rem; font-weight: 600; margin: 2rem 0 0.5rem; }
+  .help h3 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.25rem; }
+  .help p { margin: 0 0 0.75rem; }
+  .help ul, .help ol { margin: 0 0 0.75rem; padding-left: 1.5rem; }
+  .help ul { list-style: disc; }
+  .help ol { list-style: decimal; }
+  .help li { margin-bottom: 0.35rem; }
+  .help a { color: var(--color-primary-600, #0284c7); text-decoration: underline; }
+  .help strong { font-weight: 600; }
+  .help kbd, .help .button-name {
+    font-weight: 600; white-space: nowrap;
+  }
+  .help .lede { font-size: 1.05rem; opacity: 0.85; margin-bottom: 1.5rem; }
+  .help .note {
+    border-left: 3px solid var(--color-primary-500, #0ea5e9);
+    padding: 0.5rem 0 0.5rem 1rem; margin: 1rem 0;
+  }
+  .help .warning {
+    border-left: 3px solid #d97706;
+    padding: 0.5rem 0 0.5rem 1rem; margin: 1rem 0;
+  }
+  .help .topics { list-style: none; padding: 0; }
+  .help .topics li { margin-bottom: 0.9rem; }
+  .help .topics a { font-weight: 600; }
+  .help .pager { display: flex; justify-content: space-between; gap: 1rem; margin-top: 2.5rem;
+    padding-top: 1rem; border-top: 1px solid rgba(127,127,127,.3); }
+  .help .crumb { font-size: 0.85rem; margin-bottom: 0.25rem; }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}{% endblock %}
+
+{% block content %}
+<article class="help">
+  {% if topic %}<p class="crumb"><a href="{% url 'admin:help' %}">Editor's guide</a></p>{% endif %}
+  <h1>{{ title }}</h1>
+  {% block guide %}{% endblock %}
+  {% if topic %}
+  <nav class="pager" aria-label="More of the guide">
+    <span>{% if previous %}← <a href="{% url 'admin:help_topic' previous.slug %}">{{ previous.title }}</a>{% endif %}</span>
+    <span>{% if next %}<a href="{% url 'admin:help_topic' next.slug %}">{{ next.title }}</a> →{% endif %}</span>
+  </nav>
+  {% endif %}
+</article>
+{% endblock %}

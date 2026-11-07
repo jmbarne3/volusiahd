@@ -4888,3 +4888,63 @@ class SubmissionCorrectionTests(TestCase):
         self.assertEqual(submission.locations.get().query, "14 Ocean Ave, Ormond Beach")
         # Who sent it is not hers to change.
         self.assertNotIn("submitter_name", data)
+
+
+class EditorGuideTests(TestCase):
+    """The guide inside the admin (#39)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_superuser("editor", "e@example.org", "pw-for-tests-only")
+
+    def test_it_is_only_for_people_who_can_sign_in(self):
+        response = self.client.get(reverse("admin:help"))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("admin:login"), response["Location"])
+
+    def test_every_topic_renders_and_every_link_in_it_resolves(self):
+        """The guide's links are `{% url %}` tags, so a renamed screen fails here."""
+        from .help.topics import TOPICS
+
+        self.client.force_login(self.user)
+        index = self.client.get(reverse("admin:help"))
+        self.assertContains(index, "A normal week")
+        for topic in TOPICS:
+            with self.subTest(topic=topic.slug):
+                url = reverse("admin:help_topic", args=[topic.slug])
+                self.assertContains(index, f'href="{url}"')
+                response = self.client.get(url)
+                self.assertContains(response, f"<h1>{topic.title}</h1>", html=True)
+
+    def test_an_unknown_topic_is_not_found(self):
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.get("/admin/help/nothing-here/").status_code, 404)
+
+    def test_the_sidebar_lists_every_topic(self):
+        from .help.topics import TOPICS
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("admin:directory_program_changelist"))
+        self.assertContains(response, f'href="{reverse("admin:help")}"')
+        for topic in TOPICS:
+            self.assertContains(
+                response, f'href="{reverse("admin:help_topic", args=[topic.slug])}"'
+            )
+
+    def test_only_the_open_topic_is_highlighted(self):
+        """Unfold highlights a link whose path is inside the current one, which is
+        why the front page is not at /admin/help/ itself."""
+        self.client.force_login(self.user)
+        html = self.client.get(reverse("admin:help_topic", args=["programs"])).content.decode()
+        active = re.findall(r'<a href="(/admin/help/[^"]*)"[^>]*\bbg-base-100\b', html)
+        self.assertEqual(active, [reverse("admin:help_topic", args=["programs"])])
+
+    def test_the_short_address_still_works(self):
+        self.client.force_login(self.user)
+        self.assertRedirects(self.client.get("/admin/help/"), reverse("admin:help"))
+
+    def test_the_vocabulary_page_warns_about_resets(self):
+        """The one thing in the guide that can lose her work if she misses it."""
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("admin:help_topic", args=["vocabulary"]))
+        self.assertContains(response, "reset every time the site is updated")

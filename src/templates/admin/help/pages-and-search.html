@@ -1,0 +1,26 @@
+{% extends "admin/help/base.html" %}
+
+{% block guide %}
+<h2>Pages</h2>
+<p><a href="{% url 'admin:directory_page_changelist' %}">Pages</a> are the handful of plain pages on the site, like About and FAQ.</p>
+<ul>
+  <li><strong>Published</strong> — whether the page can be seen at all.</li>
+  <li><strong>Show in nav</strong> — whether it gets a link in the site's header.</li>
+  <li><strong>Sort order</strong> — lower numbers come first in the header.</li>
+</ul>
+<p>As with programs, avoid changing a page's slug once it's live — it's the page's web address.</p>
+
+<h2>Search synonyms</h2>
+<p>Search finds programs by the exact words in their listing and tags. A family searching "theatre" won't find a program that says "theater" unless you tell search the two words mean the same thing. That's what <a href="{% url 'admin:directory_searchsynonym_changelist' %}">Search synonyms</a> is for.</p>
+<ol>
+  <li>Press <span class="button-name">Add search synonym</span>.</li>
+  <li>Type the words, separated by commas — for example <kbd>theater, theatre, drama</kbd>.</li>
+  <li><span class="button-name">Save</span>. Searching any of them now finds all of them.</li>
+</ol>
+<ul>
+  <li>Single words only — "lego, robotics" works; "lego robotics" as one entry doesn't.</li>
+  <li>Each word can only be in one group. To add a word to a group, edit that group rather than starting a new one.</li>
+  <li>Capitals don't matter.</li>
+</ul>
+<p>Words for ages and grades ("tweens", "high schoolers") are handled separately and don't need adding here.</p>
+{% endblock %}

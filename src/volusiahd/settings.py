@@ -28,10 +28,12 @@ ALLOWED_HOSTS = env("ALLOWED_HOSTS") or (["localhost", "127.0.0.1"] if DEBUG els
 CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS")
 
 INSTALLED_APPS = [
-    # Unfold must precede django.contrib.admin so its templates win.
-    "unfold",
+    # Unfold must precede the admin so its templates win. BasicAppConfig is
+    # Unfold without its own site swap: the site is ours, set as the admin's
+    # default in volusiahd/apps.py, so the editor's guide can live in it (#39).
+    "unfold.apps.BasicAppConfig",
     "unfold.contrib.filters",
-    "django.contrib.admin",
+    "volusiahd.apps.AdminConfig",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",

@@ -1,0 +1,18 @@
+{% extends "admin/help/base.html" %}
+
+{% block guide %}
+<p class="lede">When someone registers and can't find the tag they want, they can type a new one. Those words wait in <a href="{% url 'admin:directory_tagsuggestion_changelist' %}">Tag suggestions</a> for you to decide.</p>
+
+<p>Approving a registration never waits on its tag suggestions. Decide them whenever suits you.</p>
+
+<h2>Deciding one</h2>
+<p>Open a suggestion and choose one of three things:</p>
+<ul>
+  <li><span class="button-name">Approve — make a new tag</span> if it's a useful word the directory doesn't have. It becomes a general tag and is added to that program. If a tag with the same name already exists, approving uses it rather than making a duplicate — the screen tells you when that's the case.</li>
+  <li><strong>Use an existing tag instead</strong> if they meant something we already have ("Lego robotics" when we have "Robotics"). Pick the tag in that box and <span class="button-name">Save</span>. The program gets the existing tag.</li>
+  <li><span class="button-name">Reject</span> if it isn't a tag at all — a sentence, a misspelling, something that belongs in their description.</li>
+</ul>
+<p>You can approve or reject several at once from the list: tick them, choose the action, and press <span class="button-name">Run</span>.</p>
+
+<p class="note">A tag is only useful if the same idea always gets the same word. When in doubt, use an existing tag.</p>
+{% endblock %}

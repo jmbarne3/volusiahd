@@ -1,0 +1,37 @@
+{% extends "admin/help/base.html" %}
+
+{% block guide %}
+<p class="lede"><a href="{% url 'admin:directory_program_changelist' %}">Programs</a> holds every listing, published or not. This is where you correct a listing after it's live.</p>
+
+<h2>Reading the list</h2>
+<ul>
+  <li><strong>Status</strong> — <em>Published</em> is on the site. <em>Draft</em> is hidden while it's being checked. <em>Archived</em> is hidden because the program no longer runs. You can change it right in the list and press <span class="button-name">Save</span> at the bottom.</li>
+  <li><strong>Featured</strong> — featured programs appear at the top of the home page. Also changeable in the list.</li>
+  <li><strong>On the map</strong> — how many of a program's places have a map pin, like "1 of 2". Orange means some don't, so families searching near that place won't find it.</li>
+  <li><strong>Last verified</strong> — the last time someone confirmed the listing is right. Orange means over a year ago, or never.</li>
+</ul>
+
+<h2>Editing a listing</h2>
+<p>Open the program, change what you need, and press <span class="button-name">Save</span>. The description has a small toolbar for bold, lists and links.</p>
+<p class="warning">Avoid changing the <strong>slug</strong>. It's the program's web address, so changing it breaks every link and bookmark people already have.</p>
+<p><strong>Who to call about this program</strong> at the bottom is for our records only. It's never shown on the site.</p>
+
+<h2>Putting places on the map</h2>
+<p>Under <strong>Where this program meets</strong>, each place is a row. Start typing in the address box and pick a match from the list — that fills in the map pin. If the place isn't in the list, type it anyway and save; the site tries to look it up when you save.</p>
+<ul>
+  <li>To look up several programs' places at once, tick them in the list, choose <span class="button-name">Look up addresses</span>, and press <span class="button-name">Run</span>.</li>
+  <li>If a place still can't be found, reword it — a street address usually works better than a building's name — or fill in the latitude and longitude yourself from a map.</li>
+  <li>A city on its own ("DeLand") is a perfectly good answer for a program with no fixed address.</li>
+</ul>
+
+<h2>Verifying</h2>
+<p>When you've confirmed a listing is still right — a phone call, a look at their website — tick it in the list, choose <span class="button-name">Mark as verified today</span>, and press <span class="button-name">Run</span>. The date shows on the program's page, so families know the details are current. Applying a suggested edit also counts as verifying.</p>
+
+<h2>Taking a program down</h2>
+<ul>
+  <li><strong>For a while</strong> — set its status to <em>Draft</em>.</li>
+  <li><strong>For good</strong> — set it to <em>Archived</em>. It stays in the admin as a record, but not on the site.</li>
+</ul>
+<p>Prefer archiving to deleting. A deleted program, and its history, can't be brought back.</p>
+<p>To publish several drafts at once, tick them, choose <span class="button-name">Publish</span>, and press <span class="button-name">Run</span>.</p>
+{% endblock %}
