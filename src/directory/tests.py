@@ -1419,12 +1419,102 @@ class GeocodingClientTests(SimpleTestCase):
             "features": [
                 {
                     "geometry": {"coordinates": [-81.3, 29.0]},
-                    "properties": {"name": "DeLand", "city": "DeLand", "postcode": "32720"},
+                    "properties": {
+                        "name": "Stetson University",
+                        "city": "DeLand",
+                        "postcode": "32723",
+                        "type": "house",
+                    },
                 }
             ]
         }
         with patch("directory.geocoding.urlopen", answering(payload)):
-            self.assertEqual(geocoding.resolve("DeLand").label, "DeLand, 32720")
+            self.assertEqual(
+                geocoding.resolve("Stetson").label, "Stetson University, DeLand, 32723"
+            )
+
+        payload["features"][0]["properties"] = {"name": "DeLand", "city": "DeLand"}
+        with patch("directory.geocoding.urlopen", answering(payload)):
+            self.assertEqual(geocoding.resolve("DeLand").label, "DeLand")
+
+    def test_a_town_has_no_postcode(self):
+        """OpenStreetMap files DeLand under one of its several ZIPs (#47)."""
+        payload = {
+            "features": [
+                {
+                    "geometry": {"coordinates": [-81.3034, 29.0281]},
+                    "properties": {
+                        "name": "DeLand",
+                        "postcode": "32723",
+                        "type": "city",
+                        "osm_key": "place",
+                        "osm_value": "city",
+                    },
+                }
+            ]
+        }
+        with patch("directory.geocoding.urlopen", answering(payload)):
+            place = geocoding.resolve("DeLand, FL")
+        self.assertEqual(place.label, "DeLand")
+        self.assertEqual(place.postcode, "")
+
+    def test_a_hamlet_filed_as_a_district_has_no_postcode_either(self):
+        payload = {
+            "features": [
+                {
+                    "geometry": {"coordinates": [-81.2642, 29.0708]},
+                    "properties": {
+                        "name": "DeLand Highlands",
+                        "postcode": "32724",
+                        "type": "district",
+                        "osm_key": "place",
+                        "osm_value": "hamlet",
+                    },
+                }
+            ]
+        }
+        with patch("directory.geocoding.urlopen", answering(payload)):
+            self.assertEqual(geocoding.resolve("DeLand Highlands").label, "DeLand Highlands")
+
+    def test_the_search_is_limited_to_the_box_around_volusia(self):
+        with patch(
+            "directory.geocoding.urlopen", side_effect=answering({"features": []})
+        ) as urlopen:
+            geocoding.search("Stetson Baptist Church")
+        url = urlopen.call_args.args[0].full_url
+        self.assertIn("bbox=-82.1%2C27.8%2C-80.4%2C29.9", url)
+
+    def test_a_match_outside_the_box_is_discarded(self):
+        """Photon honours the box, but a self-hosted instance might not."""
+        payload = {
+            "features": [
+                {
+                    "geometry": {"coordinates": [-68.99, 44.89]},
+                    "properties": {"name": "First Baptist Church", "city": "Stetson"},
+                },
+                {
+                    "geometry": {"coordinates": [-81.3237, 29.0355]},
+                    "properties": {"name": "Stetson Church", "city": "DeLand"},
+                },
+            ]
+        }
+        with patch("directory.geocoding.urlopen", answering(payload)):
+            places = geocoding.search("Stetson Baptist Church")
+        self.assertEqual([place.label for place in places], ["Stetson Church, DeLand"])
+
+    @override_settings(GEOCODER_BOUNDS=None)
+    def test_with_no_box_nothing_is_discarded(self):
+        payload = {
+            "features": [
+                {
+                    "geometry": {"coordinates": [-68.99, 44.89]},
+                    "properties": {"name": "First Baptist Church", "city": "Stetson"},
+                }
+            ]
+        }
+        with patch("directory.geocoding.urlopen", side_effect=answering(payload)) as urlopen:
+            self.assertEqual(len(geocoding.search("Stetson")), 1)
+        self.assertNotIn("bbox", urlopen.call_args.args[0].full_url)
 
     def test_nothing_found_is_an_answer_and_not_an_error(self):
         with patch("directory.geocoding.urlopen", answering({"features": []})):

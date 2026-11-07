@@ -43,6 +43,11 @@ BATCH_PAUSE_SECONDS = 1.0
 # is the most important word in the label.
 LOCAL_STATE = "Florida"
 
+# Photon's `type` for a match that is an area rather than a spot. An area has
+# no single postcode — OpenStreetMap files DeLand under Stetson University's,
+# 32723 — so a postcode on one of these is wrong more often than it is right.
+AREA_TYPES = {"city", "district", "locality", "county", "state", "country"}
+
 
 class GeocoderUnavailable(Exception):
     """The lookup could not be attempted. Distinct from finding no match.
@@ -74,10 +79,11 @@ def search(query, *, limit=5, timeout=TIMEOUT_SECONDS):
         raise GeocoderUnavailable("No geocoder is configured.")
 
     latitude, longitude = settings.GEOCODER_BIAS
-    url = "{}?{}".format(
-        settings.GEOCODER_URL,
-        urlencode({"q": query, "limit": limit, "lang": "en", "lat": latitude, "lon": longitude}),
-    )
+    params = {"q": query, "limit": limit, "lang": "en", "lat": latitude, "lon": longitude}
+    bounds = settings.GEOCODER_BOUNDS
+    if bounds:
+        params["bbox"] = ",".join(str(edge) for edge in bounds)
+    url = f"{settings.GEOCODER_URL}?{urlencode(params)}"
     request = Request(
         url,
         headers={
@@ -106,7 +112,17 @@ def search(query, *, limit=5, timeout=TIMEOUT_SECONDS):
         raise GeocoderUnavailable("The geocoder's response could not be read.") from None
 
     places = [_place(feature) for feature in features if isinstance(feature, dict)]
-    return [place for place in places if place is not None]
+    return [place for place in places if place is not None and _within(place, bounds)]
+
+
+def _within(place, bounds):
+    """Whether `place` is inside the box. Photon honours `bbox`, but a
+    self-hosted or future instance might not, and a match from another state
+    is worse than no match at all."""
+    if not bounds:
+        return True
+    west, south, east, north = bounds
+    return west <= place.longitude <= east and south <= place.latitude <= north
 
 
 def resolve(query, *, timeout=TIMEOUT_SECONDS):
@@ -134,6 +150,9 @@ def _place(feature):
     except (TypeError, ValueError):
         return None
 
+    if _is_area(properties):
+        properties = {**properties, "postcode": None}
+
     osm_id = properties.get("osm_id")
     return Place(
         label=_label(properties),
@@ -144,6 +163,11 @@ def _place(feature):
         osm_type=(properties.get("osm_type") or "")[:1],
         osm_id=osm_id if isinstance(osm_id, int) else None,
     )
+
+
+def _is_area(properties):
+    """A town, county or neighbourhood rather than an address or a building."""
+    return properties.get("type") in AREA_TYPES or properties.get("osm_key") == "place"
 
 
 def _label(properties):

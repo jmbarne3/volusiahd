@@ -163,9 +163,13 @@ TESTING = "test" in sys.argv
 GEOCODER_URL = "" if TESTING else env("GEOCODER_URL", default="https://photon.komoot.io/api")
 
 # Results are biased toward the middle of Volusia County so that "Main Street"
-# finds the right Main Street. A bias, not a bounding box — a program a mile
-# into Flagler or Seminole is still a program families here drive to.
+# finds the right Main Street, and restricted to a box around Volusia and the
+# counties that border it (Flagler, Putnam, Lake, Seminole, Orange, Brevard).
+# The bias alone let a church in Maine outrank one in DeLand. The box is
+# generous on purpose: a program a few miles into a neighbouring county is
+# still one families here drive to. West, south, east, north — Photon's order.
 GEOCODER_BIAS = (29.05, -81.2)
+GEOCODER_BOUNDS = (-82.1, 27.8, -80.4, 29.9)
 
 # --- Site identity, used in templates and Open Graph tags -------------------
 
