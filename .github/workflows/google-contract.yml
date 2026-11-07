@@ -23,7 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v10
+      # setup-uv publishes exact versions only (no v10 tag since v8), so pin one.
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
 
