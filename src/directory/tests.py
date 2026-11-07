@@ -4519,6 +4519,46 @@ class LogoDisplayTests(TestCase):
         response = self.client.get(program.get_absolute_url())
         self.assertContains(response, f'class="logo" src="{program.logo.url}"')
 
+    def test_the_copy_knows_its_size(self):
+        program = self._program(image_upload((800, 400)))
+        self.assertEqual((program.logo_display_width, program.logo_display_height), (320, 160))
+        program.refresh_from_db()
+        self.assertEqual((program.logo_display_width, program.logo_display_height), (320, 160))
+
+    def test_the_page_reserves_the_logos_space(self):
+        """Without these the text below jumps when the logo arrives (#50)."""
+        program = self._program(image_upload((800, 400)))
+        response = self.client.get(program.get_absolute_url())
+        self.assertContains(response, 'width="320" height="160"')
+
+    def test_a_copy_with_no_recorded_size_still_shows(self):
+        program = self._program(image_upload((800, 400)))
+        Program.objects.filter(pk=program.pk).update(
+            logo_display_width=None, logo_display_height=None
+        )
+        response = self.client.get(program.get_absolute_url())
+        self.assertContains(response, f'class="logo" src="{program.logo_display.url}" alt=""')
+
+    def test_removing_the_logo_forgets_the_size(self):
+        program = self._program(image_upload((800, 400)))
+        program = Program.objects.get(pk=program.pk)
+        program.logo = None
+        program.save()
+        program.refresh_from_db()
+        self.assertIsNone(program.logo_display_width)
+
+    def test_the_command_records_sizes_it_did_not_have(self):
+        """Copies made by v0.8.0 have no size; a plain run fills it in (#50)."""
+        program = self._program(image_upload((800, 400)))
+        Program.objects.filter(pk=program.pk).update(
+            logo_display_width=None, logo_display_height=None
+        )
+        out = StringIO()
+        call_command("resize_logos", stdout=out)
+        self.assertIn("Resized 1 logo.", out.getvalue())
+        program.refresh_from_db()
+        self.assertEqual((program.logo_display_width, program.logo_display_height), (320, 160))
+
     def test_the_command_fills_in_copies_that_are_missing(self):
         program = self._program(image_upload((800, 400)))
         untouched = self._program(name="No Logo", slug="no-logo")

@@ -1014,6 +1014,13 @@ class Program(SanitizedRichTextMixin, SharedProgramFields):
     # The copy the program page shows, made from `logo` whenever it changes.
     # Never edited by hand; see `refresh_logo_display` and directory/images.py.
     logo_display = models.ImageField(upload_to="logos/display/", blank=True, editable=False)
+    # Its size, written alongside it, so the page can reserve the space before
+    # the image arrives and nothing below it jumps (#50). Deliberately not the
+    # ImageField's own width_field/height_field: those re-measure a row whose
+    # size is missing every time it is loaded, which against object storage is
+    # a download per page view.
+    logo_display_width = models.PositiveIntegerField(null=True, blank=True, editable=False)
+    logo_display_height = models.PositiveIntegerField(null=True, blank=True, editable=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1025,6 +1032,9 @@ class Program(SanitizedRichTextMixin, SharedProgramFields):
     )
 
     objects = ProgramQuerySet.as_manager()
+
+    # Everything `refresh_logo_display` writes, for saves that name their fields.
+    LOGO_DISPLAY_FIELDS = ["logo_display", "logo_display_width", "logo_display_height"]
 
     class Meta:
         ordering = ["name"]
@@ -1040,7 +1050,7 @@ class Program(SanitizedRichTextMixin, SharedProgramFields):
         if changed_logo or (self.logo and not self.logo_display):
             self.refresh_logo_display()
             if (update_fields := kwargs.get("update_fields")) is not None:
-                kwargs["update_fields"] = {*update_fields, "logo_display"}
+                kwargs["update_fields"] = {*update_fields, *self.LOGO_DISPLAY_FIELDS}
         result = super().save(*args, **kwargs)
         self._loaded_logo = self.logo.name or ""
         return result
@@ -1065,6 +1075,7 @@ class Program(SanitizedRichTextMixin, SharedProgramFields):
         original. A program should never fail to save over its logo.
         """
         self.logo_display = None
+        self.logo_display_width = self.logo_display_height = None
         if not self.logo:
             return False
 
@@ -1093,6 +1104,7 @@ class Program(SanitizedRichTextMixin, SharedProgramFields):
             return False
 
         self.logo_display.save(copy.name, copy, save=False)
+        self.logo_display_width, self.logo_display_height = copy.width, copy.height
         return True
 
     @property

@@ -29,7 +29,8 @@ class NotAnImage(Exception):
 
 
 def display_copy(data, name):
-    """A copy of `data` no wider than DISPLAY_WIDTH, as a ContentFile.
+    """A copy of `data` no wider than DISPLAY_WIDTH, as a ContentFile with
+    `width` and `height` set.
 
     Never upscaled: a logo already narrower than that is re-encoded at its own
     size. A logo with any transparency stays a PNG — flattening one to JPEG
@@ -58,7 +59,11 @@ def display_copy(data, name):
         image.convert("RGB").save(buffer, format="JPEG", quality=JPEG_QUALITY, optimize=True)
         suffix = ".jpg"
 
-    return ContentFile(buffer.getvalue(), name=PurePosixPath(name).stem + suffix)
+    copy = ContentFile(buffer.getvalue(), name=PurePosixPath(name).stem + suffix)
+    # Carried along so the page can reserve the logo's space before it loads
+    # (#50), without anyone opening the file again to measure it.
+    copy.width, copy.height = image.size
+    return copy
 
 
 def _has_transparency(image):

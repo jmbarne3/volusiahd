@@ -6,10 +6,12 @@
 A logo saved after the copy existed gets one automatically, in
 `Program.save()`. This is for the logos uploaded before that, and for redoing
 every copy if `images.DISPLAY_WIDTH` ever changes. It is safe to run again: a
-program that already has a copy is skipped unless `--all` says otherwise.
+program that already has a copy, and knows its size, is skipped unless `--all`
+says otherwise.
 """
 
 from django.core.management.base import BaseCommand
+from django.db.models import Q
 
 from directory.models import Program
 
@@ -27,12 +29,13 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         programs = Program.objects.exclude(logo="")
         if not options["all"]:
-            programs = programs.filter(logo_display="")
+            # No copy, or a copy made before its size was recorded (#50).
+            programs = programs.filter(Q(logo_display="") | Q(logo_display_width__isnull=True))
 
         made, failed = 0, []
         for program in programs.iterator():
             if program.refresh_logo_display():
-                program.save(update_fields=["logo_display"])
+                program.save(update_fields=Program.LOGO_DISPLAY_FIELDS)
                 made += 1
             else:
                 failed.append(program.name)
