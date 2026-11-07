@@ -38,7 +38,7 @@ from django.urls import reverse
 from django.utils.html import escapejs
 from PIL import Image
 
-from . import geocoding
+from . import geocoding, images
 from . import questions as q
 from .addresses import DEBOUNCE_MS, MIN_QUERY_CHARS, LocationsField
 from .models import (
@@ -102,10 +102,15 @@ class PublicSiteTests(TestCase):
             with self.subTest(url=url):
                 self.assertEqual(self.client.get(url).status_code, 200)
 
-    @override_settings(SITE_BASE_URL="https://volusiahd.org")
+    @override_settings(
+        SITE_BASE_URL="https://volusiahd.org",
+        MEDIA_ROOT=tempfile.mkdtemp(prefix="hsd-test-media-"),
+    )
     def test_og_image_uses_a_single_absolute_url_when_storage_is_already_absolute(self):
         self.program.logo = "logos/mmlogo.jpg"
-        self.program.save(update_fields=["logo"])
+        # The file is not really there, so no page-sized copy can be made.
+        with self.assertLogs("directory.models", "WARNING"):
+            self.program.save(update_fields=["logo"])
         absolute_url = "https://volusiahd-media.t3.tigrisfiles.io/logos/mmlogo.jpg"
         with patch.object(self.program.logo.storage, "url", return_value=absolute_url):
             response = self.client.get(
@@ -1045,6 +1050,8 @@ class ApprovalTests(TestCase):
         self.assertNotEqual(program.logo.name, submission.logo.name)
         with program.logo.open("rb") as handle:
             self.assertTrue(handle.read().startswith(b"\x89PNG"))
+        # Approval is how most logos arrive, so it has to make the page copy too.
+        self.assertTrue(program.logo_display)
 
     def test_rejecting_creates_nothing(self):
         submission = self._registration()
@@ -4422,3 +4429,113 @@ class MinifiedStaticFilesTests(TestCase):
         admin = Path(django_apps.get_app_config("admin").path) / "static"
         self.assertTrue(storage._is_ours(FileSystemStorage(settings.STATICFILES_DIRS[0])))
         self.assertFalse(storage._is_ours(FileSystemStorage(admin)))
+
+
+def image_upload(size, *, mode="RGB", colour="white", format="PNG", name="logo.png"):
+    buffer = BytesIO()
+    Image.new(mode, size, colour).save(buffer, format=format)
+    return SimpleUploadedFile(name, buffer.getvalue())
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp(prefix="hsd-test-media-"))
+class LogoDisplayTests(TestCase):
+    """The page-sized copy of a program's logo (#42)."""
+
+    def _program(self, logo=None, **fields):
+        return Program.objects.create(
+            name=fields.pop("name", "Logo Co-op"),
+            slug=fields.pop("slug", "logo-co-op"),
+            short_description="Has a logo.",
+            status=Program.Status.PUBLISHED,
+            logo=logo,
+            **fields,
+        )
+
+    def _display(self, program):
+        with program.logo_display.open("rb") as handle:
+            return Image.open(BytesIO(handle.read()))
+
+    def test_a_big_photo_becomes_a_small_jpeg_and_the_original_is_kept(self):
+        program = self._program(image_upload((3000, 1500), format="JPEG", name="sign.jpg"))
+        display = self._display(program)
+        self.assertEqual(display.format, "JPEG")
+        self.assertEqual(display.size, (images.DISPLAY_WIDTH, 160))
+        with program.logo.open("rb") as handle:
+            self.assertEqual(Image.open(BytesIO(handle.read())).size, (3000, 1500))
+
+    def test_a_transparent_logo_stays_a_transparent_png(self):
+        program = self._program(image_upload((800, 400), mode="RGBA", colour=(0, 0, 0, 0)))
+        display = self._display(program)
+        self.assertEqual(display.format, "PNG")
+        self.assertEqual(display.mode, "RGBA")
+        self.assertEqual(display.getpixel((0, 0))[3], 0)
+
+    def test_an_opaque_png_becomes_a_jpeg(self):
+        program = self._program(image_upload((800, 400), mode="RGBA", colour=(10, 20, 30, 255)))
+        self.assertEqual(self._display(program).format, "JPEG")
+
+    def test_a_small_logo_is_never_upscaled(self):
+        program = self._program(image_upload((100, 50)))
+        self.assertEqual(self._display(program).size, (100, 50))
+
+    def test_the_page_shows_the_copy(self):
+        program = self._program(image_upload((800, 400)))
+        response = self.client.get(program.get_absolute_url())
+        self.assertContains(response, f'class="logo" src="{program.logo_display.url}"')
+        # Social previews want the bigger one.
+        self.assertContains(response, program.logo.name.split("/")[-1])
+
+    def test_a_new_logo_replaces_the_copy_and_no_logo_removes_it(self):
+        program = self._program(image_upload((800, 400)))
+        first = program.logo_display.name
+
+        program = Program.objects.get(pk=program.pk)
+        program.logo = image_upload((900, 300), name="new.png")
+        program.save()
+        self.assertNotEqual(program.logo_display.name, first)
+        self.assertEqual(self._display(program).size, (images.DISPLAY_WIDTH, 107))
+
+        program = Program.objects.get(pk=program.pk)
+        program.logo = None
+        program.save()
+        program.refresh_from_db()
+        self.assertFalse(program.logo_display)
+
+    def test_saving_without_touching_the_logo_does_not_remake_the_copy(self):
+        program = self._program(image_upload((800, 400)))
+        program = Program.objects.get(pk=program.pk)
+        with patch("directory.images.display_copy") as display_copy:
+            program.name = "Renamed"
+            program.save()
+        display_copy.assert_not_called()
+
+    def test_a_file_that_is_not_an_image_still_saves_and_falls_back(self):
+        with self.assertLogs("directory.models", "WARNING"):
+            program = self._program(SimpleUploadedFile("logo.png", b"not an image"))
+        program.refresh_from_db()
+        self.assertTrue(program.logo)
+        self.assertFalse(program.logo_display)
+        response = self.client.get(program.get_absolute_url())
+        self.assertContains(response, f'class="logo" src="{program.logo.url}"')
+
+    def test_the_command_fills_in_copies_that_are_missing(self):
+        program = self._program(image_upload((800, 400)))
+        untouched = self._program(name="No Logo", slug="no-logo")
+        # As the logos uploaded before #42 are: an original and no copy.
+        Program.objects.filter(pk=program.pk).update(logo_display="")
+
+        out = StringIO()
+        call_command("resize_logos", stdout=out)
+        self.assertIn("Resized 1 logo.", out.getvalue())
+        program.refresh_from_db()
+        self.assertEqual(self._display(program).size, (images.DISPLAY_WIDTH, 160))
+        untouched.refresh_from_db()
+        self.assertFalse(untouched.logo_display)
+
+        out = StringIO()
+        call_command("resize_logos", stdout=out)
+        self.assertIn("Resized 0 logos.", out.getvalue())
+
+        out = StringIO()
+        call_command("resize_logos", "--all", stdout=out)
+        self.assertIn("Resized 1 logo.", out.getvalue())

@@ -14,6 +14,7 @@ they should have to go hunting through paragraphs for. It stays optional, and
 """
 
 import calendar
+import logging
 import math
 import re
 import time
@@ -32,7 +33,9 @@ from django.utils.html import escape
 from django.utils.text import capfirst
 from django_prose_editor.fields import ProseEditorField
 
-from . import geocoding
+from . import geocoding, images
+
+logger = logging.getLogger(__name__)
 
 # A deliberately narrow toolbar. A full word-processor toolbar invites
 # inconsistent typography that then has to be cleaned up by hand across
@@ -1006,6 +1009,9 @@ class Program(SanitizedRichTextMixin, SharedProgramFields):
         help_text="Featured programs appear at the top of the home page.",
     )
     logo = models.ImageField(upload_to="logos/", blank=True)
+    # The copy the program page shows, made from `logo` whenever it changes.
+    # Never edited by hand; see `refresh_logo_display` and directory/images.py.
+    logo_display = models.ImageField(upload_to="logos/display/", blank=True, editable=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1024,8 +1030,68 @@ class Program(SanitizedRichTextMixin, SharedProgramFields):
     def __str__(self):
         return self.name
 
+    def save(self, *args, **kwargs):
+        # None means the row was loaded without its logo column, so there is
+        # nothing to compare against and nothing is assumed to have changed.
+        loaded = getattr(self, "_loaded_logo", "" if self._state.adding else None)
+        changed_logo = loaded is not None and (self.logo.name or "") != loaded
+        if changed_logo or (self.logo and not self.logo_display):
+            self.refresh_logo_display()
+            if (update_fields := kwargs.get("update_fields")) is not None:
+                kwargs["update_fields"] = {*update_fields, "logo_display"}
+        result = super().save(*args, **kwargs)
+        self._loaded_logo = self.logo.name or ""
+        return result
+
     def get_absolute_url(self):
         return reverse("directory:program", kwargs={"slug": self.slug})
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        """Remember the logo as loaded, so `save()` can tell a new one arrived."""
+        instance = super().from_db(db, field_names, values)
+        instance._loaded_logo = (
+            (instance.__dict__.get("logo") or "") if "logo" in field_names else None
+        )
+        return instance
+
+    def refresh_logo_display(self):
+        """Remake the page-sized copy of the logo. True if there is one now.
+
+        Never raises. A logo that cannot be read — missing from storage, or not
+        an image at all — leaves no copy, and the page falls back to the
+        original. A program should never fail to save over its logo.
+        """
+        self.logo_display = None
+        if not self.logo:
+            return False
+
+        # A logo just uploaded in the admin is not in storage yet, and Django
+        # still has to save it once this returns, so it is rewound rather than
+        # closed.
+        uploaded = not self.logo._committed
+        try:
+            self.logo.open("rb")
+            data = self.logo.read()
+        except Exception:
+            logger.warning("Could not read the logo for %s (%s)", self.slug, self.logo.name)
+            return False
+        finally:
+            if uploaded:
+                self.logo.seek(0)
+            else:
+                self.logo.close()
+
+        try:
+            copy = images.display_copy(data, self.logo.name)
+        except images.NotAnImage:
+            logger.warning(
+                "The logo for %s is not a readable image (%s)", self.slug, self.logo.name
+            )
+            return False
+
+        self.logo_display.save(copy.name, copy, save=False)
+        return True
 
     @property
     def is_published(self):

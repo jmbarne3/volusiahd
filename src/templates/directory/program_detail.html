@@ -11,7 +11,7 @@
 {% block content %}
 <article class="program">
   <p class="crumb"><a href="{% url 'directory:program_list' %}">All programs</a></p>
-  {% if program.logo %}<img class="logo" src="{{ program.logo.url }}" alt="">{% endif %}
+  {% if program.logo_display %}<img class="logo" src="{{ program.logo_display.url }}" alt="">{% elif program.logo %}<img class="logo" src="{{ program.logo.url }}" alt="">{% endif %}
   <h1>{{ program.name }}</h1>
   <p class="lede">{{ program.short_description }}</p>
 
