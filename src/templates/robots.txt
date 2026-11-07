@@ -1,5 +1,6 @@
 User-agent: *
 Allow: /
 Disallow: /admin/
+Disallow: /programs/*/suggest-edit/
 
 Sitemap: {{ site_base_url }}/sitemap.xml

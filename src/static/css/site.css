@@ -663,6 +663,10 @@ a.tag:hover { color: var(--ink-strong); }
 @media (prefers-reduced-motion: reduce) { .social-link { transition: none; } }
 
 .verified { color: var(--muted); font-size: .9rem; margin: 0; }
+/* Quiet on purpose (#49): a way to fix the listing, not a call to action. */
+.suggest-edit { font-size: .9rem; margin: var(--s-3) 0 0; }
+.suggest-edit a { color: var(--muted); }
+.suggest-edit a:hover { color: var(--accent-hover); }
 
 /* --- Callout and flashes ------------------------------------------------- */
 

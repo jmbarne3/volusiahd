@@ -16,6 +16,7 @@ from django.db import models
 
 from . import questions as q
 from .addresses import LocationsField
+from .edits import description_text, program_values
 from .models import Category, Submission, SubmissionLocation, Tag, TagGroup, TagSuggestion
 
 # Bots fill every field they find; people never see this one.
@@ -694,8 +695,10 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             )
         return names
 
+    kind = Submission.Kind.REGISTRATION
+
     def save(self, commit=True):
-        self.instance.kind = Submission.Kind.REGISTRATION
+        self.instance.kind = self.kind
         submission = super().save(commit=commit)
         if commit:
             self._write_suggestions(submission)
@@ -714,6 +717,75 @@ class ProgramRegistrationForm(BaseSubmissionForm):
             TagSuggestion(submission=submission, name=name)
             for name in self.cleaned_data.get("suggested_tags", [])
         )
+
+
+class ProgramEditForm(ProgramRegistrationForm):
+    """The registration form, pre-filled from a listed program (#49).
+
+    Somebody fixing a phone number changes one box and sends it; everything else
+    arrives exactly as it was, and `edits.changes()` sorts out which is which.
+    Anyone may suggest an edit, so instead of the registrant's "I am authorized"
+    box this asks who they are, and only somebody who runs the program is
+    recorded as authorized.
+    """
+
+    kind = Submission.Kind.EDIT
+
+    RUNS_IT = "runs"
+    SOMEONE_ELSE = "other"
+
+    relationship = forms.ChoiceField(
+        choices=[
+            (RUNS_IT, "I run this program"),
+            (SOMEONE_ELSE, "I'm a parent or someone else"),
+        ],
+        widget=forms.RadioSelect,
+        label="Who are you?",
+    )
+
+    def __init__(self, data=None, *args, program, **kwargs):
+        self.program = program
+        self._program_tags = list(program.tags.all())
+        if data is None:
+            kwargs.setdefault("initial", self.initial_from(program))
+        super().__init__(data, *args, **kwargs)
+        del self.fields["is_authorized"]
+        # We need somebody to ask if the change is unclear, and a stranger's
+        # edit with no way back to them is one we cannot check.
+        self.fields["submitter_name"].required = True
+        self.fields["submitter_email"].required = True
+        self.fields["submitter_role"].label = "Your role, if you have one"
+        self.fields[
+            "logo"
+        ].help_text = "Leave this empty to keep the current logo. PNG or JPEG, up to 2 MB."
+        # The tag questions are built from the database inside the parent's
+        # __init__, so their starting answers can only be filled in after it.
+        for group in self.question_groups if data is None else []:
+            name = self.question_field_name(group)
+            if name in self.initial:
+                continue
+            answers = [tag for tag in self._program_tags if tag.group_id == group.pk]
+            self.initial[name] = (
+                answers if group.allows_several else (answers[0] if answers else None)
+            )
+
+    def initial_from(self, program):
+        """The program's answers, as the form's starting values."""
+        return {
+            **program.shared_values(),
+            "program_name": program.name,
+            "short_description": program.short_description,
+            "description": description_text(program.description),
+            "category": program.category,
+            "tags": [tag for tag in self._program_tags if not tag.group_id],
+            "locations": list(program.locations.all()),
+        }
+
+    def save(self, commit=True):
+        self.instance.edits_program = self.program
+        self.instance.edit_baseline = program_values(self.program)
+        self.instance.is_authorized = self.cleaned_data["relationship"] == self.RUNS_IT
+        return super().save(commit=commit)
 
 
 class ProgramReferralForm(BaseSubmissionForm):

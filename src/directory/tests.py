@@ -35,10 +35,11 @@ from django.core.management import call_command
 from django.db.models import ProtectedError
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.html import escapejs
 from PIL import Image
 
-from . import geocoding, images
+from . import edits, geocoding, images
 from . import questions as q
 from .addresses import DEBOUNCE_MS, MIN_QUERY_CHARS, LocationsField
 from .models import (
@@ -4539,3 +4540,311 @@ class LogoDisplayTests(TestCase):
         out = StringIO()
         call_command("resize_logos", "--all", stdout=out)
         self.assertIn("Resized 1 logo.", out.getvalue())
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp(prefix="hsd-test-media-"))
+class SuggestEditTests(TestCase):
+    """Suggesting an edit to a listed program, and applying it (#49)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_superuser("editor", "e@example.org", "pw-for-tests-only")
+        cls.category = Category.objects.create(name="Co-ops", slug="co-ops")
+        cls.lego = Tag.objects.create(name="Lego", slug="lego")
+
+    def setUp(self):
+        self.program = Program.objects.create(
+            name="Coastal Co-op",
+            slug="coastal-co-op",
+            short_description="A Thursday co-op for K–8 families.",
+            description="<p>We meet <strong>weekly</strong>.</p><p>Classes run all year.</p>",
+            category=self.category,
+            website="https://coastal.example.org",
+            phone="386-555-0100",
+            email="hello@coastal.example.org",
+            grade_levels="elementary,middle",
+            meeting_days="thu",
+            status=Program.Status.PUBLISHED,
+        )
+        self.program.tags.add(self.lego)
+        self.program.locations.create(
+            query="12 Ocean Ave, Ormond Beach",
+            label="12 Ocean Avenue, Ormond Beach",
+            latitude=29.2858,
+            longitude=-81.0559,
+            status=ProgramLocation.Status.RESOLVED,
+        )
+        self.url = reverse("directory:suggest_edit", args=[self.program.slug])
+
+    def _form_data(self, **changes):
+        """What a browser would send back from the pre-filled form, plus `changes`."""
+        from .addresses import _values
+        from .forms import ProgramEditForm
+
+        form = ProgramEditForm(program=self.program)
+        data = {}
+        for name in form.fields:
+            if name in ("logo", "website_url"):
+                continue
+            value = form[name].value()
+            if name == "locations":
+                data[name] = [raw for raw, _ in _values(value)]
+            elif isinstance(value, bool):
+                if value:
+                    data[name] = "on"
+            elif isinstance(value, (list, tuple)):
+                data[name] = [str(item) for item in value]
+            elif value is not None:
+                data[name] = str(value)
+        data.update(
+            relationship="other",
+            submitter_name="Sam Parent",
+            submitter_email="sam@example.org",
+            website_url="",
+        )
+        data.update(changes)
+        return data
+
+    def _send(self, **changes):
+        response = self.client.post(self.url, self._form_data(**changes))
+        self.assertRedirects(
+            response, reverse("directory:suggest_edit_thanks", args=[self.program.slug])
+        )
+        return Submission.objects.get(kind=Submission.Kind.EDIT)
+
+    def test_the_program_page_links_to_it(self):
+        response = self.client.get(self.program.get_absolute_url())
+        self.assertContains(response, f'href="{self.url}"')
+        self.assertContains(response, "Suggest an edit")
+
+    def test_a_draft_cannot_be_edited(self):
+        self.program.status = Program.Status.DRAFT
+        self.program.save()
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+
+    def test_the_form_starts_from_the_listing(self):
+        response = self.client.get(self.url)
+        self.assertContains(response, 'value="Coastal Co-op"')
+        self.assertContains(response, 'value="386-555-0100"')
+        # Plain text for the public form: paragraphs kept, formatting dropped.
+        self.assertContains(response, "We meet weekly.\n\nClasses run all year.")
+        self.assertContains(response, "Send this edit")
+        self.assertContains(response, 'name="robots" content="noindex"')
+        self.assertNotContains(response, 'name="is_authorized"')
+
+    def test_sending_it_back_unchanged_changes_nothing(self):
+        submission = self._send()
+        self.assertEqual(submission.edits_program, self.program)
+        self.assertEqual(edits.changes(submission), [])
+
+    @override_settings(NOTIFICATION_EMAILS=["owner@example.org"])
+    def test_it_is_announced_as_an_edit(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            self._send(phone="386-555-0199")
+        self.assertEqual(mail.outbox[-1].subject, "Edit suggested: Coastal Co-op")
+
+    def test_someone_who_does_not_run_it_is_not_recorded_as_authorized(self):
+        self.assertFalse(self._send().is_authorized)
+        Submission.objects.all().delete()
+        self.assertTrue(self._send(relationship="runs").is_authorized)
+
+    def test_a_stranger_has_to_say_who_they_are(self):
+        response = self.client.post(self.url, self._form_data(submitter_email=""))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Submission.objects.exists())
+
+    def test_applying_changes_only_what_was_changed(self):
+        submission = self._send(phone="386-555-0199", meeting_days=["tue", "thu"])
+        self.assertEqual(
+            [change.key for change in edits.changes(submission)], ["phone", "meeting_days"]
+        )
+
+        edits.apply(submission)
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.phone, "386-555-0199")
+        self.assertEqual(self.program.meeting_days, "tue,thu")
+        # The rest of the listing, including its address and its formatting.
+        self.assertEqual(self.program.slug, "coastal-co-op")
+        self.assertEqual(self.program.status, Program.Status.PUBLISHED)
+        self.assertIn("<strong>weekly</strong>", self.program.description)
+        self.assertEqual(list(self.program.tags.all()), [self.lego])
+        self.assertEqual(self.program.locations.get().latitude, 29.2858)
+        self.assertEqual(self.program.last_verified_on, timezone.localdate())
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, Submission.Status.APPROVED)
+
+    def test_a_rewritten_description_replaces_the_old_one(self):
+        submission = self._send(description="We meet on Thursdays.\n\nAll ages welcome.")
+        edits.apply(submission)
+        self.program.refresh_from_db()
+        self.assertEqual(
+            self.program.description, "<p>We meet on Thursdays.</p><p>All ages welcome.</p>"
+        )
+
+    def test_a_correction_made_since_is_not_undone(self):
+        submission = self._send(phone="386-555-0199")
+        Program.objects.filter(pk=self.program.pk).update(
+            email="new@coastal.example.org", updated_at=timezone.now()
+        )
+        self.assertTrue(edits.is_stale(submission))
+        edits.apply(submission)
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.email, "new@coastal.example.org")
+        self.assertEqual(self.program.phone, "386-555-0199")
+
+    def test_a_field_changed_on_both_sides_is_flagged(self):
+        submission = self._send(phone="386-555-0199")
+        Program.objects.filter(pk=self.program.pk).update(phone="386-555-0123")
+        (change,) = edits.changes(submission)
+        self.assertTrue(change.changed_since)
+
+    def test_setting_a_field_back_drops_that_part_of_the_edit(self):
+        """How the editor accepts half an edit: correct the submission first."""
+        submission = self._send(phone="386-555-0199", website="https://new.example.org")
+        submission.phone = "386-555-0100"
+        submission.save()
+        self.assertEqual([change.key for change in edits.changes(submission)], ["website"])
+
+    def test_the_review_screen_lists_the_changes(self):
+        submission = self._send(phone="386-555-0199")
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse("admin:directory_submission_change", args=[submission.pk])
+        )
+        self.assertContains(response, "Suggested changes")
+        self.assertContains(response, "386-555-0199")
+        self.assertContains(response, "Apply edit")
+        self.assertNotContains(response, "Approve — publish the program")
+        # Hers to correct before applying.
+        self.assertContains(response, 'name="phone"')
+
+    def test_the_review_screen_does_not_show_its_own_markup(self):
+        """Two notes at once used to lose their HTML-safety and show as raw tags."""
+        submission = self._send(phone="386-555-0199", description="Something new.")
+        Program.objects.filter(pk=self.program.pk).update(updated_at=timezone.now())
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse("admin:directory_submission_change", args=[submission.pk])
+        )
+        self.assertContains(response, "edited since this was sent")
+        self.assertContains(response, "replaces the description")
+        self.assertNotContains(response, "&lt;p style")
+        self.assertNotContains(response, "&lt;strong&gt;")
+
+    def test_changed_words_are_marked(self):
+        current, suggested = edits.highlight(
+            "We meet on Thursdays at noon.", "We meet on Tuesdays and Thursdays at noon."
+        )
+        self.assertIn(">Tuesdays and</mark>", suggested)
+        self.assertNotIn("<del", current)
+        self.assertIn("We meet on ", suggested)
+
+        current, suggested = edits.highlight("386-555-0100", "386-555-0199")
+        self.assertIn(">386-555-0100</del>", current)
+        self.assertIn(">386-555-0199</mark>", suggested)
+
+        current, suggested = edits.highlight("—", "Physics")
+        self.assertEqual(current, "—")
+        self.assertIn(">Physics</mark>", suggested)
+
+    def test_marking_escapes_what_people_typed(self):
+        _, suggested = edits.highlight("Hello", "Hello <script>")
+        self.assertIn("&lt;script&gt;", suggested)
+        self.assertNotIn("<script>", suggested)
+
+    def test_approving_an_edit_does_not_make_a_second_program(self):
+        submission = self._send(phone="386-555-0199")
+        self.client.force_login(self.user)
+        self.client.post(
+            "/admin/directory/submission/",
+            {"action": "approve_and_publish", "_selected_action": [str(submission.pk)]},
+        )
+        self.assertEqual(Program.objects.count(), 1)
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, Submission.Status.NEW)
+
+    def test_the_apply_button_applies_it(self):
+        submission = self._send(phone="386-555-0199")
+        self.client.force_login(self.user)
+        self.client.get(reverse("admin:directory_submission_apply_edit_one", args=[submission.pk]))
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.phone, "386-555-0199")
+
+
+def form_fields(html_text):
+    """The values a browser would send from the first form on a page with a <form>."""
+    from html.parser import HTMLParser
+
+    class Collector(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.data, self.textarea, self.select = [], None, None
+
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            name = attrs.get("name")
+            if tag == "input" and name and attrs.get("type") not in ("submit", "button", "file"):
+                if attrs.get("type") in ("checkbox", "radio") and "checked" not in attrs:
+                    return
+                self.data.append(
+                    (name, attrs.get("value", "on" if attrs.get("type") == "checkbox" else ""))
+                )
+            elif tag == "textarea" and name:
+                self.textarea = [name, ""]
+            elif tag == "select" and name:
+                self.select = name
+            elif tag == "option" and self.select and "selected" in attrs:
+                self.data.append((self.select, attrs.get("value", "")))
+
+        def handle_data(self, data):
+            if self.textarea:
+                self.textarea[1] += data
+
+        def handle_endtag(self, tag):
+            if tag == "textarea" and self.textarea:
+                self.data.append(tuple(self.textarea))
+                self.textarea = None
+            elif tag == "select":
+                self.select = None
+
+    collector = Collector()
+    collector.feed(html_text)
+    fields = {}
+    for name, value in collector.data:
+        fields.setdefault(name, []).append(value)
+    return fields
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp(prefix="hsd-test-media-"))
+class SubmissionCorrectionTests(TestCase):
+    """The editor can correct a submission before approving or applying it (#49)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_superuser("editor", "e@example.org", "pw-for-tests-only")
+
+    def test_a_correction_is_saved_and_carried_into_the_program(self):
+        submission = Submission.objects.create(
+            program_name="Costal Co-op",
+            short_description="A Thursday co-op.",
+            phone="386-555-0100",
+            submitter_name="Dana",
+            submitter_email="dana@example.org",
+        )
+        submission.locations.create(query="12 Ocean Ave, Ormond Beach")
+        self.client.force_login(self.user)
+        url = reverse("admin:directory_submission_change", args=[submission.pk])
+
+        data = form_fields(self.client.get(url).content.decode())
+        data.pop("action", None)
+        data["program_name"] = ["Coastal Co-op"]
+        data["locations-0-query"] = ["14 Ocean Ave, Ormond Beach"]
+        data["_save"] = [""]
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 302, response.content.decode()[:2000])
+
+        submission.refresh_from_db()
+        self.assertEqual(submission.program_name, "Coastal Co-op")
+        self.assertEqual(submission.locations.get().query, "14 Ocean Ave, Ormond Beach")
+        # Who sent it is not hers to change.
+        self.assertNotIn("submitter_name", data)

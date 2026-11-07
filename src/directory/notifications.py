@@ -56,6 +56,8 @@ def submission_received(submission):
     in that registration's email rather than in one of their own: one email
     per thing somebody sent, not one per field they filled in.
     """
+    if submission.is_edit:
+        return _edit_received(submission)
     registration = submission.is_registration
     kind = "registration" if registration else "suggestion"
     category = submission.category.name if submission.category else "No category chosen"
@@ -86,3 +88,22 @@ def submission_received(submission):
         count = len(suggested)
         subject += f" ({count} tag suggestion{'s' if count != 1 else ''})"
     notify(subject, "\n".join(lines))
+
+
+def _edit_received(submission):
+    """Somebody suggested an edit to a listed program (#49)."""
+    program = submission.edits_program
+    name = program.name if program else submission.program_name
+    sender = submission.submitter_name or "(no name given)"
+    if submission.submitter_email:
+        sender += f" <{submission.submitter_email}>"
+    who = "runs the program" if submission.is_authorized else "doesn't run the program"
+    lines = [
+        f"Somebody suggested an edit to {name}.",
+        "",
+        f"Sent by:   {sender} ({who})",
+        "",
+        "See what changed and apply or reject it here:",
+        admin_link("admin:directory_submission_change", submission.pk),
+    ]
+    notify(f"Edit suggested: {name}", "\n".join(lines))

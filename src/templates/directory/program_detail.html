@@ -82,6 +82,7 @@
       {% if program.last_verified_on %}
         <p class="verified">We last confirmed these details on {{ program.last_verified_on|date:"F j, Y" }}.</p>
       {% endif %}
+      <p class="suggest-edit"><a href="{% url 'directory:suggest_edit' program.slug %}">Suggest an edit</a></p>
     </aside>
   </div>
 </article>

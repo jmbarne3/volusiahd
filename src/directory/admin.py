@@ -5,12 +5,9 @@ cleanup pass. The test of this file is that someone who has never seen the
 codebase can add a program without asking a question.
 """
 
-from pathlib import Path
-
 from django import forms
 from django.contrib import admin, messages
 from django.contrib.auth.models import Group
-from django.core.files.base import ContentFile
 from django.db.models import Count
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
@@ -21,6 +18,7 @@ from django.utils.text import slugify
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.decorators import action, display
 
+from . import edits
 from .addresses import DEBOUNCE_MS, MIN_QUERY_CHARS, parse_place
 from .models import (
     Category,
@@ -30,6 +28,7 @@ from .models import (
     ProgramLocation,
     SearchSynonym,
     Submission,
+    SubmissionLocation,
     Tag,
     TagGroup,
     TagSuggestion,
@@ -130,6 +129,25 @@ class ProgramLocationInline(TabularInline):
     class Media:
         css = {"all": ["css/address-picker.css"]}
         js = ["js/address-picker.js"]
+
+
+class SubmissionLocationForm(ProgramLocationForm):
+    class Meta(ProgramLocationForm.Meta):
+        model = SubmissionLocation
+
+
+class SubmissionLocationInline(ProgramLocationInline):
+    """The places a submission names, editable before it becomes a program.
+
+    The same rows, and the same address picker, as the program screen. Rows
+    without coordinates are the ones somebody typed in their own words; they
+    are looked up after approval, as they always were.
+    """
+
+    model = SubmissionLocation
+    form = SubmissionLocationForm
+    extra = 0
+    verbose_name_plural = "Where they meet"
 
 
 class ContactPersonInline(TabularInline):
@@ -670,27 +688,29 @@ class SubmissionAdmin(ModelAdmin):
         "locations__city",
     ]
     date_hierarchy = "created_at"
-    inlines = [TagSuggestionInline]
-    actions = ["approve_and_publish", "create_draft_program", "mark_rejected"]
-    # The same three as buttons on a registration's own screen (#41).
-    actions_detail = ["approve_and_publish_one", "create_draft_program_one", "mark_rejected_one"]
+    inlines = [SubmissionLocationInline, TagSuggestionInline]
+    actions = ["approve_and_publish", "create_draft_program", "apply_edits", "mark_rejected"]
+    # The same as buttons on a registration's own screen (#41). Which of them
+    # show depends on the kind; see `get_actions_detail`.
+    actions_detail = [
+        "approve_and_publish_one",
+        "create_draft_program_one",
+        "apply_edit_one",
+        "mark_rejected_one",
+    ]
     # Her chance to correct the registrant's tagging before it is published.
     autocomplete_fields = ["tags"]
 
-    # Everything the public typed is a record of what they said, not something
-    # we edit. Corrections happen on the Program after approval.
+    # What the program says is hers to correct before it goes live: a typo in a
+    # registration, or the half of a suggested edit she agrees with (#49).
+    # Applying an edit copies only what differs from the program as it stood,
+    # so setting a field back to that value drops that part of the edit.
     #
-    # The shared fields are spread in from the model rather than typed out, so a
-    # question added to the registration form cannot arrive here as an editable
-    # box nobody meant to offer — or, worse, silently not arrive at all.
+    # What stays fixed is the record of who sent it and what has been done
+    # with it. No copy of the original wording is kept; she is the only
+    # reviewer, and the change is hers to make.
     readonly_fields = [
         "kind",
-        "program_name",
-        "short_description",
-        "description",
-        *Submission.shared_field_names(),
-        "days_display",
-        "places_display",
         "logo_preview",
         "submitter_name",
         "submitter_email",
@@ -698,6 +718,8 @@ class SubmissionAdmin(ModelAdmin):
         "is_authorized",
         "created_at",
         "created_program",
+        "edits_program",
+        "changes_display",
         # Set by the Approve and Reject buttons. Picking "Approved" by hand
         # would mark it approved without ever building the program.
         "status",
@@ -716,16 +738,16 @@ class SubmissionAdmin(ModelAdmin):
                     "category",
                     "tags",
                     "logo_preview",
+                    "logo",
                 ],
-                "description": "Category and tags are the two things worth correcting "
-                "before approval. Everything else is what they wrote. The Approve and "
-                "Reject buttons at the top don't save this page, so save any "
+                "description": "Correct anything here before you approve or apply it. "
+                "The buttons at the top don't save this page, so save your "
                 "corrections first.",
             },
         ),
         (
             "How to reach them",
-            {"fields": ["website", "facebook", "email", "phone", "places_display"]},
+            {"fields": ["website", "facebook", "email", "phone"]},
         ),
         (
             "Who teaches, and for whom",
@@ -741,7 +763,7 @@ class SubmissionAdmin(ModelAdmin):
             "When",
             {
                 "fields": [
-                    "days_display",
+                    "meeting_days",
                     ("meeting_time_start", "meeting_time_end"),
                     ("season_start", "season_end"),
                     "meeting_schedule",
@@ -787,35 +809,82 @@ class SubmissionAdmin(ModelAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request).select_related("created_program")
 
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = super().get_fieldsets(request, obj)
+        if obj is None or not obj.is_edit:
+            return fieldsets
+        # An edit is read as a list of changes. The whole listing is still
+        # below it, as the person sent it, for anything the table leaves out.
+        return [
+            (
+                "Suggested changes",
+                {
+                    "fields": ["edits_program", "changes_display"],
+                    "description": "Only what this person changed is listed, and only "
+                    "that is copied when you apply it. To leave part of it out, set "
+                    "that field below back to what the program says now, and save.",
+                },
+            ),
+            *fieldsets,
+        ]
+
+    @display(description="What would change")
+    def changes_display(self, obj):
+        if not obj.is_edit:
+            return "—"
+        if obj.edits_program is None:
+            return "The program this edit was for has been deleted."
+        rows = edits.changes(obj)
+        if not rows:
+            return "Nothing — they sent the listing back unchanged."
+
+        notes = []
+        if obj.status == Submission.Status.NEW and edits.is_stale(obj):
+            notes.append(
+                mark_safe(
+                    "<strong>The program has been edited since this was sent.</strong> "
+                    "Rows marked ⚠ were changed there too, and applying would overwrite that."
+                )
+            )
+        if any(row.key == "description" for row in rows):
+            notes.append(
+                "Applying replaces the description, and its formatting (bold, lists, "
+                "links) with it."
+            )
+        notes_html = format_html_join(
+            "", '<p style="margin:0 0 .75rem">{}</p>', ((note,) for note in notes)
+        )
+
+        cell = "padding:.4rem .75rem .4rem 0;vertical-align:top;text-align:left"
+        head = f"{cell};font-weight:600;white-space:nowrap"
+        body = format_html_join(
+            "",
+            f'<tr><th scope="row" style="{head}">{{}}{{}}</th>'
+            f'<td style="{cell};white-space:pre-line">{{}}</td>'
+            f'<td style="{cell};white-space:pre-line">{{}}</td></tr>',
+            (
+                (
+                    row.label,
+                    " ⚠" if row.changed_since else "",
+                    *edits.highlight(row.current, row.suggested),
+                )
+                for row in rows
+            ),
+        )
+        return format_html(
+            '{}<table style="border-collapse:collapse;width:100%">'
+            '<thead><tr><th style="{}">Field</th><th style="{};width:42%">Now</th>'
+            '<th style="{};width:42%">Suggested</th></tr></thead><tbody>{}</tbody></table>',
+            notes_html,
+            head,
+            head,
+            head,
+            body,
+        )
+
     @display(description="Kind", ordering="kind", label=True)
     def kind_display(self, obj):
         return obj.get_kind_display().split(" — ")[0]
-
-    @display(description="Days they meet")
-    def days_display(self, obj):
-        """The stored value is "tue,thu", which is not a thing to show anybody."""
-        return obj.meeting_days_display or "—"
-
-    @display(description="Where they meet")
-    def places_display(self, obj):
-        """Every place they named, and whether it is actually on the map.
-
-        Worth saying out loud on this screen: a place the submitter picked off
-        the suggestion list arrives with coordinates, and one they typed in their
-        own words does not. The second kind is not a problem, but it is the kind
-        that will need a look after approval.
-        """
-        places = list(obj.locations.all())
-        if not places:
-            return "—"
-        return format_html_join(
-            mark_safe("<br>"),
-            "{}{}",
-            (
-                (place.display_name, "" if place.has_point else " — not on the map")
-                for place in places
-            ),
-        )
 
     @display(description="Where")
     def where_display(self, obj):
@@ -845,6 +914,37 @@ class SubmissionAdmin(ModelAdmin):
         updated = queryset.update(status=Submission.Status.REJECTED)
         self.message_user(request, f"Rejected {updated}.", messages.SUCCESS)
 
+    @action(description="Apply edit — update the program")
+    def apply_edits(self, request, queryset):
+        applied, skipped = 0, 0
+        for submission in queryset:
+            # A rejected edit can still be applied, as a rejected registration
+            # can still be approved.
+            if (
+                not submission.is_edit
+                or submission.status == Submission.Status.APPROVED
+                or submission.edits_program is None
+            ):
+                skipped += 1
+                continue
+            edits.apply(submission)
+            applied += 1
+        if applied:
+            word = "edit" if applied == 1 else "edits"
+            self.message_user(request, f"Applied {applied} {word}.", messages.SUCCESS)
+        if skipped:
+            self.message_user(
+                request,
+                f"Skipped {skipped}: only edits not yet applied, to a program that still "
+                "exists, can be applied.",
+                messages.WARNING,
+            )
+
+    @action(description="Apply edit — update the program", url_path="apply-edit")
+    def apply_edit_one(self, request, object_id):
+        self.apply_edits(request, self.get_queryset(request).filter(pk=object_id))
+        return redirect(reverse("admin:directory_submission_change", args=[object_id]))
+
     @action(description="Approve — publish the program", url_path="approve")
     def approve_and_publish_one(self, request, object_id):
         return self._decide_one(request, object_id, self.approve_and_publish)
@@ -863,7 +963,16 @@ class SubmissionAdmin(ModelAdmin):
         submission = self.get_object(request, object_id)
         if submission is None or submission.created_program_id:
             return []
-        return super().get_actions_detail(request, object_id)
+        actions = super().get_actions_detail(request, object_id)
+        if submission.is_edit:
+            # An edit changes a program that exists; approving one would build
+            # a second copy of it. Apply and Reject until it has been applied.
+            if submission.status == Submission.Status.APPROVED:
+                return []
+            wanted = ("_apply_edit_one", "_mark_rejected_one")
+        else:
+            wanted = ("_approve_and_publish_one", "_create_draft_program_one", "_mark_rejected_one")
+        return [action for action in actions if action.action_name.endswith(wanted)]
 
     def _decide_one(self, request, object_id, decide):
         """Run a list action on this one registration, then come back to it."""
@@ -877,9 +986,13 @@ class SubmissionAdmin(ModelAdmin):
     def _approve(self, request, queryset, status):
         created, skipped, incomplete = 0, 0, []
 
+        edits_skipped = 0
         for submission in queryset:
             if submission.created_program_id:
                 skipped += 1
+                continue
+            if submission.is_edit:
+                edits_skipped += 1
                 continue
 
             # Nothing to show in a listing means nothing worth publishing.
@@ -910,6 +1023,14 @@ class SubmissionAdmin(ModelAdmin):
             self.message_user(
                 request, f"Skipped {skipped} already-approved {word}.", messages.WARNING
             )
+        if edits_skipped:
+            self.message_user(
+                request,
+                f"Skipped {edits_skipped} suggested "
+                f"{'edit' if edits_skipped == 1 else 'edits'}. Use “Apply edit” for those — "
+                "approving would make a second copy of the program.",
+                messages.WARNING,
+            )
 
 
 def build_program_from(submission, status):
@@ -938,17 +1059,7 @@ def build_program_from(submission, status):
     )
 
     if submission.logo:
-        # Copy the bytes rather than sharing a path, so the submission record
-        # and the published program have independent file lifetimes.
-        submission.logo.open("rb")
-        try:
-            program.logo.save(
-                Path(submission.logo.name).name,
-                ContentFile(submission.logo.read()),
-                save=False,
-            )
-        finally:
-            submission.logo.close()
+        submission.copy_logo_to(program)
 
     program.save()
     program.tags.set(submission.tags.all())

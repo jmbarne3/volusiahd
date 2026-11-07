@@ -20,9 +20,11 @@ import re
 import time
 from functools import reduce
 from operator import or_
+from pathlib import Path
 
 from django import forms
 from django.core.exceptions import ValidationError
+from django.core.files.base import ContentFile
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Exists, F, FloatField, OuterRef, Q, Subquery, Value
@@ -1565,6 +1567,7 @@ class Submission(SharedProgramFields):
     class Kind(models.TextChoices):
         REGISTRATION = "registration", "Registration — the provider's own program"
         REFERRAL = "referral", "Referral — someone else suggested it"
+        EDIT = "edit", "Edit — a change to a listed program"
 
     class Status(models.TextChoices):
         NEW = "new", "New — needs review"
@@ -1635,6 +1638,20 @@ class Submission(SharedProgramFields):
         on_delete=models.SET_NULL,
         related_name="from_submissions",
     )
+    # A suggested edit (#49) points at the program it would change, and keeps
+    # that program's answers as they stood when the edit was sent. The
+    # difference between the two is what the person actually changed, which is
+    # all that applying it copies — so an edit made in the admin since then is
+    # not quietly undone by a form that was pre-filled before it.
+    edits_program = models.ForeignKey(
+        Program,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="suggested_edits",
+        verbose_name="program to change",
+    )
+    edit_baseline = models.JSONField(default=dict, blank=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -1646,6 +1663,22 @@ class Submission(SharedProgramFields):
     @property
     def is_registration(self):
         return self.kind == self.Kind.REGISTRATION
+
+    @property
+    def is_edit(self):
+        return self.kind == self.Kind.EDIT
+
+    def copy_logo_to(self, program):
+        """Put a copy of this submission's logo on `program`, without saving it.
+
+        The bytes rather than the path, so the submission record and the
+        published program have independent file lifetimes.
+        """
+        self.logo.open("rb")
+        try:
+            program.logo.save(Path(self.logo.name).name, ContentFile(self.logo.read()), save=False)
+        finally:
+            self.logo.close()
 
     @property
     def is_complete_enough_to_publish(self):

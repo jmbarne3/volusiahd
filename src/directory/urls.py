@@ -11,6 +11,12 @@ urlpatterns = [
     path("", views.home, name="home"),
     path("programs/", views.program_list, name="program_list"),
     path("programs/<slug:slug>/", views.program_detail, name="program"),
+    path("programs/<slug:slug>/suggest-edit/", views.suggest_edit, name="suggest_edit"),
+    path(
+        "programs/<slug:slug>/suggest-edit/thanks/",
+        views.suggest_edit_thanks,
+        name="suggest_edit_thanks",
+    ),
     path("categories/<slug:slug>/", views.category_detail, name="category"),
     path("tags/<slug:slug>/", views.tag_detail, name="tag"),
     path("register/", views.register_program, name="register"),

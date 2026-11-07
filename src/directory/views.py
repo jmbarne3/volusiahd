@@ -10,7 +10,7 @@ from django.views.decorators.http import require_GET
 from . import geocoding, notifications
 from . import questions as q
 from .addresses import DEBOUNCE_MS, MIN_QUERY_CHARS, parse_coordinate
-from .forms import ProgramReferralForm, ProgramRegistrationForm
+from .forms import ProgramEditForm, ProgramReferralForm, ProgramRegistrationForm
 from .models import (
     GRADE_LEVEL_NAMES,
     GRADE_LEVELS,
@@ -437,6 +437,24 @@ def register_program(request):
 
 def register_thanks(request):
     return render(request, "directory/register_thanks.html")
+
+
+def suggest_edit(request, slug):
+    """Anyone's door to correcting a listing (#49). Reviewed before it applies."""
+    program = get_object_or_404(_published_programs(), slug=slug)
+    if request.method == "POST":
+        form = ProgramEditForm(request.POST, request.FILES, program=program)
+        if form.is_valid():
+            notifications.submission_received(form.save())
+            return redirect("directory:suggest_edit_thanks", slug=program.slug)
+    else:
+        form = ProgramEditForm(program=program)
+    return render(request, "directory/register.html", {"form": form, "editing": program})
+
+
+def suggest_edit_thanks(request, slug):
+    program = get_object_or_404(_published_programs(), slug=slug)
+    return render(request, "directory/suggest_edit_thanks.html", {"program": program})
 
 
 def refer_program(request):

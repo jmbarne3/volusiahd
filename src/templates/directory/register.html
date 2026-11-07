@@ -1,9 +1,12 @@
 {% extends "base.html" %}
 {% load directory_extras static %}
 
-{% block title %}Register your program — {{ site_name }}{% endblock %}
-{% block og_title %}Register your program{% endblock %}
-{% block meta_description %}Run a homeschool co-op, class, team, or support group in Volusia County? Add it to the directory.{% endblock %}
+{% comment %}The same page suggests an edit to a listed program (#49), with
+`editing` set to that program and the form pre-filled from it.{% endcomment %}
+{% block title %}{% if editing %}Suggest an edit to {{ editing.name }}{% else %}Register your program{% endif %} — {{ site_name }}{% endblock %}
+{% block og_title %}{% if editing %}Suggest an edit to {{ editing.name }}{% else %}Register your program{% endif %}{% endblock %}
+{% block meta_description %}{% if editing %}Spotted something out of date about {{ editing.name }}? Tell us and we will check it.{% else %}Run a homeschool co-op, class, team, or support group in Volusia County? Add it to the directory.{% endif %}{% endblock %}
+{% block robots %}{% if editing %}<meta name="robots" content="noindex">{% endif %}{% endblock %}
 
 {% comment %}
 Select2 comes from django.contrib.admin's vendored copies rather than a CDN or a
@@ -31,8 +34,14 @@ if Select2 is there, and works without it if not.
 {% endblock %}
 
 {% block content %}
+{% if editing %}
+<p class="crumb"><a href="{{ editing.get_absolute_url }}">{{ editing.name }}</a></p>
+<h1>Suggest an edit</h1>
+<p class="lede">This is the listing for {{ editing.name }} as it stands. Change whatever is wrong or out of date and send it — someone checks every edit before it appears on the page.</p>
+{% else %}
 <h1>Register your program</h1>
 <p class="lede">Run a co-op, class, team, studio, or support group in Volusia County? Fill this in once and it goes in the directory. Everything below is what families will see on your page, so the more you tell us, the less we have to ask.</p>
+{% endif %}
 
 {% comment %}
 `data-scoped-form` is what register-form.js looks for. The heading chosen under
@@ -58,7 +67,7 @@ sections simply stack and the whole form shows, as it always has.
   <section class="form-page form-panel" data-form-page data-title="The basics">
     <fieldset>
       <legend>The basics</legend>
-      {% field form.is_authorized %}
+      {% if editing %}{% field form.relationship %}{% else %}{% field form.is_authorized %}{% endif %}
       {% field form.category %}
       {% field form.program_name %}
       {% field form.class_names %}
@@ -159,8 +168,13 @@ sections simply stack and the whole form shows, as it always has.
   </section>
 
   <div class="form-actions">
+    {% if editing %}
+    <button type="submit" data-form-submit>Send this edit</button>
+    <p class="hint" data-form-submit-hint>We check every edit before it appears, usually within a few days.</p>
+    {% else %}
     <button type="submit" data-form-submit>Register this program</button>
     <p class="hint" data-form-submit-hint>We read every registration before it appears, usually within a few days.</p>
+    {% endif %}
   </div>
 </form>
 {% endblock %}

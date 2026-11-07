@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+
+{% block title %}Edit received — {{ site_name }}{% endblock %}
+{% block robots %}<meta name="robots" content="noindex">{% endblock %}
+
+{% block content %}
+<h1>Thank you — we have your edit</h1>
+<p class="lede">Someone checks every edit before it appears, so give us a few days. If anything is unclear we will email you at the address you gave.</p>
+<p><a href="{% url 'directory:program' program.slug %}">Back to {{ program.name }}</a></p>
+{% endblock %}
