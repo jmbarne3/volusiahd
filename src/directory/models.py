@@ -840,6 +840,23 @@ class SharedProgramFields(models.Model):
         return self.delivery in {self.Delivery.ONLINE, self.Delivery.HYBRID}
 
 
+def offers_online():
+    """The condition "Virtual options available" filters by."""
+    return Q(
+        delivery__in=[SharedProgramFields.Delivery.ONLINE, SharedProgramFields.Delivery.HYBRID]
+    )
+
+
+def _places_in_range(latitude, longitude, miles):
+    """A program's meeting places within `miles` of a point, each with `miles`."""
+    return (
+        ProgramLocation.objects.filter(program=OuterRef("pk"))
+        .within_box(latitude, longitude, miles)
+        .annotate(miles=miles_from(latitude, longitude))
+        .filter(miles__lte=miles)
+    )
+
+
 class ProgramQuerySet(models.QuerySet):
     """The filters the listing page is built from.
 
@@ -875,9 +892,7 @@ class ProgramQuerySet(models.QuerySet):
         return self.filter(faith_basis=basis)
 
     def online(self):
-        return self.filter(
-            delivery__in=[SharedProgramFields.Delivery.ONLINE, SharedProgramFields.Delivery.HYBRID]
-        )
+        return self.filter(offers_online())
 
     def direct_pay(self):
         return self.filter(step_up_direct_pay=True)
@@ -894,16 +909,21 @@ class ProgramQuerySet(models.QuerySet):
         filter to the query however many places a program has — and composes
         with the keyword search without multiplying its rows.
         """
-        nearest = (
-            ProgramLocation.objects.filter(program=OuterRef("pk"))
-            .within_box(latitude, longitude, miles)
-            .annotate(miles=miles_from(latitude, longitude))
-            .filter(miles__lte=miles)
-            .order_by("miles")
-            .values("miles")[:1]
-        )
+        nearest = _places_in_range(latitude, longitude, miles).order_by("miles").values("miles")[:1]
         return self.annotate(distance=Subquery(nearest, output_field=FloatField())).filter(
             distance__isnull=False
+        )
+
+    def in_range_or_unplaced(self, latitude, longitude, miles):
+        """Everything a distance search lists: in range, plus what it cannot place.
+
+        The same programs as `near()` and `without_a_point()` together, for when
+        only the count matters (#51). Asking whether a place is in range is
+        cheaper than finding the nearest one, and there is nothing to sort.
+        """
+        return self.filter(
+            Exists(_places_in_range(latitude, longitude, miles))
+            | ~Exists(ProgramLocation.objects.mappable().filter(program=OuterRef("pk")))
         )
 
     def without_a_point(self):

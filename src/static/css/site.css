@@ -964,7 +964,9 @@ main.listing-page { padding-block: 0 var(--s-8); }
 
 .filter-links a {
   display: flex;
-  align-items: center;
+  /* Top, not centre: a long name wraps, and the swatch and count belong to
+     its first line, not the middle of the whole block. */
+  align-items: flex-start;
   gap: .55rem;
   padding: .3rem .5rem;
   margin-inline: -.5rem;
@@ -978,10 +980,22 @@ main.listing-page { padding-block: 0 var(--s-8); }
   flex: none;
   width: .5rem;
   height: .5rem;
+  /* Centred on the first line of the name: half of what the line is taller
+     than the dot. The fixed value is for browsers without the `lh` unit. */
+  margin-top: .5rem;
+  margin-top: calc((1lh - .5rem) / 2);
   border-radius: 50%;
   background: var(--code, var(--muted));
 }
 .filter-links a:hover { background: var(--pane-raised); color: var(--ink-strong); }
+/* How many programs the link would list (#51). Quieter than the name, and
+   pulled in from the flex gap so it reads as part of it: "Sports (4)". */
+.filter-links .count {
+  margin-inline-start: -.3rem;
+  color: var(--muted);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
 
 /* "Show more" under the categories: a quiet link-looking button, always under
    the list. listing-filters.js adds `.is-folded` and unhides the button. */

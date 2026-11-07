@@ -4948,3 +4948,139 @@ class EditorGuideTests(TestCase):
         self.client.force_login(self.user)
         response = self.client.get(reverse("admin:help_topic", args=["vocabulary"]))
         self.assertContains(response, "reset every time the site is updated")
+
+
+class CategoryCountTests(TestCase):
+    """The counts beside each category in the listing's sidebar (#51)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        def category(slug, name, order):
+            return Category.objects.create(name=name, slug=slug, sort_order=order)
+
+        cls.tutoring = category(q.TUTORING, "Tutoring", 1)  # asks about delivery
+        cls.coops = category("co-ops", "Co-ops", 2)  # does not
+        cls.sports = category(q.SPORTS, "Sports", 3)
+        cls.arts = category("arts-and-crafts", "Arts and Crafts", 4)
+        cls.lego = Tag.objects.create(name="Lego", slug="lego")
+        cls.robotics = Tag.objects.create(name="Lego robotics", slug="lego-robotics")
+
+        def program(slug, cat, **fields):
+            return Program.objects.create(
+                name=fields.pop("name", slug.title()),
+                slug=slug,
+                short_description="A program.",
+                status=fields.pop("status", Program.Status.PUBLISHED),
+                category=cat,
+                **fields,
+            )
+
+        cls.t1 = program(
+            "lego-tutor",
+            cls.tutoring,
+            name="Lego Tutor",
+            meeting_days="thu",
+            delivery=Program.Delivery.ONLINE,
+        )
+        cls.t1.tags.set([cls.lego, cls.robotics])
+        cls.t2 = program("math-tutor", cls.tutoring, meeting_days="thu")
+        cls.c1 = program("deland-coop", cls.coops, meeting_days="thu")
+        cls.c1.locations.create(query="DeLand", latitude=29.03, longitude=-81.30)
+        cls.c2 = program("far-coop", cls.coops, meeting_days="tue")
+        cls.c2.locations.create(query="Jacksonville", latitude=30.33, longitude=-81.66)
+        cls.c3 = program("home-coop", cls.coops, meeting_days="thu")
+        cls.s1 = program("soccer", cls.sports, meeting_days="thu")
+        # Drafts are never counted.
+        program("hidden", cls.sports, meeting_days="thu", status=Program.Status.DRAFT)
+
+    def _links(self, url, params=""):
+        response = self.client.get(f"{url}?{params}" if params else url)
+        return response, [(c.slug, c.result_count) for c in response.context["categories"]]
+
+    def _listed(self, url):
+        context = self.client.get(url).context
+        return len(context["programs"]) + len(context["unplaced"] or [])
+
+    def assertCountsMatchClicks(self, params):
+        """Each category's number is what its own link actually lists."""
+        _, links = self._links(reverse("directory:program_list"), params)
+        for slug, count in links:
+            with self.subTest(params=params, category=slug):
+                url = reverse("directory:category", args=[slug])
+                self.assertEqual(count, self._listed(f"{url}?{params}"))
+
+    def test_counts_match_what_each_link_lists(self):
+        for params in [
+            "",
+            "day=thu",
+            "q=lego",
+            "online=1",
+            "day=thu&online=1",
+            "near=DeLand&lat=29.03&lng=-81.30&within=10",
+        ]:
+            self.assertCountsMatchClicks(params)
+
+    def test_most_results_first_and_ties_keep_the_admins_order(self):
+        _, links = self._links(reverse("directory:program_list"), "day=thu")
+        # Tutoring and Co-ops both have two; Tutoring sorts first in the admin.
+        self.assertEqual(
+            links, [(q.TUTORING, 2), ("co-ops", 2), (q.SPORTS, 1), ("arts-and-crafts", 0)]
+        )
+
+    def test_a_category_page_counts_as_if_it_were_not_chosen(self):
+        _, everywhere = self._links(reverse("directory:program_list"), "day=thu")
+        _, on_coops = self._links(reverse("directory:category", args=["co-ops"]), "day=thu")
+        self.assertEqual(on_coops, everywhere)
+
+    def test_a_tag_page_counts_its_own_programs(self):
+        _, links = self._links(reverse("directory:tag", args=["lego"]))
+        self.assertEqual(
+            dict(links), {q.TUTORING: 1, "co-ops": 0, q.SPORTS: 0, "arts-and-crafts": 0}
+        )
+
+    def test_a_program_matching_a_word_several_ways_counts_once(self):
+        _, links = self._links(reverse("directory:program_list"), "q=lego")
+        self.assertEqual(dict(links)[q.TUTORING], 1)
+
+    def test_virtual_only_narrows_the_categories_that_ask_about_it(self):
+        _, links = self._links(reverse("directory:program_list"), "online=1")
+        counts = dict(links)
+        self.assertEqual(counts[q.TUTORING], 1)
+        # Co-ops are never asked, so its page ignores the filter, and so does its count.
+        self.assertEqual(counts["co-ops"], 3)
+
+    def test_a_distance_search_counts_what_it_cannot_place(self):
+        _, links = self._links(
+            reverse("directory:program_list"), "near=DeLand&lat=29.03&lng=-81.30&within=10"
+        )
+        # The DeLand co-op is in range, the home co-op has no address to measure,
+        # and the Jacksonville one is out of range.
+        self.assertEqual(dict(links)["co-ops"], 2)
+
+    def test_an_empty_category_still_shows_and_links(self):
+        response, _ = self._links(reverse("directory:program_list"), "day=thu")
+        self.assertContains(response, '<span class="count">(0)</span>')
+        self.assertContains(response, 'aria-label="Arts and Crafts, 0 programs"')
+        self.assertContains(response, f'href="{self.arts.get_absolute_url()}?day=thu"')
+
+    def test_the_counts_cost_one_query(self):
+        """Performance matters on this page: one GROUP BY, whatever the filters."""
+        from django.test import RequestFactory
+
+        from .views import _category_links, _published_programs, _read_filters
+
+        request = RequestFactory().get(
+            "/programs/",
+            {
+                "q": "lego",
+                "day": "thu",
+                "online": "1",
+                "near": "DeLand",
+                "lat": "29.03",
+                "lng": "-81.30",
+            },
+        )
+        chosen = _read_filters(request, offers_virtual=True)
+        # The categories themselves, and the counts.
+        with self.assertNumQueries(2):
+            _category_links(request, _published_programs(), chosen)

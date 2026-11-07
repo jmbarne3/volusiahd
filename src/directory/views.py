@@ -2,7 +2,7 @@ import hashlib
 import re
 
 from django.core.cache import cache
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET
@@ -22,6 +22,7 @@ from .models import (
     Program,
     SearchSynonym,
     Tag,
+    offers_online,
 )
 
 # How long an answer to the same question is worth keeping. Addresses do not
@@ -200,6 +201,17 @@ def _narrow(request, programs, *, offers_virtual=True):
     into the context, because a filter you cannot see is applied to you is worse
     than no filter at all.
     """
+    chosen = _read_filters(request, offers_virtual=offers_virtual)
+    return _apply_filters(programs, chosen), chosen
+
+
+def _read_filters(request, *, offers_virtual):
+    """What the query string asks for, read once.
+
+    Read separately from applying it so the category counts (#51) can apply the
+    same filters to a second queryset without looking anything up twice — the
+    search synonyms are a query, and a typed place can be a geocoder call.
+    """
     chosen = {
         "q": request.GET.get("q", "").strip(),
         # In week order, whatever order they were ticked in, and only real days,
@@ -214,16 +226,25 @@ def _narrow(request, programs, *, offers_virtual=True):
         "tags": [slug.strip() for slug in request.GET.getlist("tag") if slug.strip()],
         **_chosen_place(request),
     }
+    chosen["words"] = _search_words(chosen["q"])
+    chosen["synonyms"] = SearchSynonym.lookup() if chosen["words"] else {}
+    return chosen
 
+
+def _apply_filters(programs, chosen, *, online=True):
+    """Narrow `programs` by everything in `chosen` except the place.
+
+    The place is left to the caller, because the listing and the category
+    counts use it differently: one needs distances to sort by, the other only
+    needs to know what is in range.
+    """
     # Every word has to turn up somewhere, but not together and not in order:
     # "spanish beginners" finds "Beginners Spanish", and "lego deltona" finds a
     # Lego club whose address is in Deltona. One filter per word, rather than
     # one Q, so each word gets its own join and can match a different tag or
     # location from the others.
-    words = _search_words(chosen["q"])
-    synonyms = SearchSynonym.lookup() if words else {}
-    for word in words:
-        programs = programs.filter(_matches_word(word, synonyms))
+    for word in chosen["words"]:
+        programs = programs.filter(_matches_word(word, chosen["synonyms"]))
 
     programs = (
         programs.meeting_on(chosen["days"])
@@ -231,11 +252,54 @@ def _narrow(request, programs, *, offers_virtual=True):
         .at_grade_levels(chosen["grades"])
         .tagged(chosen["tags"])
     )
-    if chosen["online"]:
+    if online and chosen["online"]:
         programs = programs.online()
     if chosen["directpay"]:
         programs = programs.direct_pay()
-    return programs, chosen
+    return programs
+
+
+def _category_links(request, base, chosen):
+    """Every category, each with how many programs its link would list (#51).
+
+    The count is what clicking the category would show: every filter in force
+    except the category itself, which is the usual way faceted search counts.
+    Ordered most results first, so the categories on screen before "Show more"
+    are the useful ones; ties keep the admin's order. A category with nothing
+    stays in the list as (0), so the list keeps its shape as filters change.
+
+    One query, however many categories: a single GROUP BY over the filtered
+    programs. "Virtual options available" only applies on the headings that
+    ask about delivery, so when it is on, it goes into the count as a
+    condition rather than a filter — each category counted the way its own
+    page would apply it, still in the one query.
+    """
+    categories = list(Category.objects.all())
+    programs = _apply_filters(base, chosen, online=False)
+    if point := chosen["point"]:
+        programs = programs.in_range_or_unplaced(*point, chosen["within"])
+
+    condition = None
+    # The raw parameter, not `chosen`: a page that ignores the filter still
+    # passes it along in its category links, and the page it leads to may not.
+    if request.GET.get("online") == "1":
+        asking = q.headings_asking("delivery")
+        condition = offers_online() | ~Q(
+            category__in=[category.pk for category in categories if category.slug in asking]
+        )
+    # Counting needs none of what the listing preloads, and no ordering: an
+    # ORDER BY would join the GROUP BY and split the counts.
+    counts = dict(
+        programs.prefetch_related(None)
+        .order_by()
+        .values_list("category")
+        .annotate(n=Count("pk", distinct=True, filter=condition))
+    )
+
+    for category in categories:
+        category.result_count = counts.get(category.pk, 0)
+    # Stable, so equal counts keep the admin's sort order and then name.
+    return sorted(categories, key=lambda category: -category.result_count)
 
 
 def _clean_params(request, chosen):
@@ -304,9 +368,15 @@ def _active_chips(request, chosen):
     return [{"label": label, "remove_url": url} for label, url in chips]
 
 
-def _listing_context(request, programs, **extra):
-    """Shared context for every page that renders the program listing."""
+def _listing_context(request, programs, *, facet_base=None, **extra):
+    """Shared context for every page that renders the program listing.
+
+    `facet_base` is what the category counts start from: the programs before
+    any category was applied. A tag page has no category to remove, so it
+    leaves this out and the counts start from its own programs.
+    """
     offers_virtual = _offers_virtual(**extra)
+    base = programs if facet_base is None else facet_base
     programs, chosen = _narrow(request, programs, offers_virtual=offers_virtual)
 
     # With a place chosen the listing splits in two. Programs in range, nearest
@@ -338,7 +408,7 @@ def _listing_context(request, programs, **extra):
         "active_chips": _active_chips(request, chosen),
         "keep_query": keep.urlencode(),
         "empty_message": empty_message,
-        "categories": Category.objects.all(),
+        "categories": _category_links(request, base, chosen),
         "query": chosen["q"],
         "filters": chosen,
         "filters_active": filters_active,
@@ -380,6 +450,7 @@ def program_list(request):
         _listing_context(
             request,
             programs,
+            facet_base=_published_programs(),
             active_category=active_category,
             # On this page the heading is a query parameter, so the filter form
             # has to carry it. On a category page it is in the path already and a
@@ -395,7 +466,10 @@ def category_detail(request, slug):
         request,
         "directory/program_list.html",
         _listing_context(
-            request, _published_programs().filter(category=category), active_category=category
+            request,
+            _published_programs().filter(category=category),
+            facet_base=_published_programs(),
+            active_category=category,
         ),
     )
 

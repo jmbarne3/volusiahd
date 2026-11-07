@@ -84,13 +84,16 @@ so a phone shows programs first and filters on request.
       stays hidden. It starts unfolded when the current heading is one of the
       folded ones — a selected category hidden behind a toggle would look like no
       category at all.
+
+      Each carries how many programs it would list with the other filters as
+      they are, and they arrive sorted by that count, most first (#51).
       {% endcomment %}
       <section class="filter-group" data-fold{% if active_category in categories|slice:"5:" %} data-fold-open{% endif %}>
         <h2 class="filter-heading">Category</h2>
         <ul class="filter-links" id="category-links">
           <li><a class="c-all{% if not active_category and not active_tag %} active{% endif %}" href="{% url 'directory:program_list' %}{% if keep_query %}?{{ keep_query }}{% endif %}">All programs</a></li>
           {% for category in categories %}
-            <li{% if forloop.counter > 5 %} class="fold-extra"{% endif %}><a class="c{{ category|colour_code }}{% if category == active_category %} active{% endif %}"{% if category == active_category %} aria-current="page"{% endif %} href="{{ category.get_absolute_url }}{% if keep_query %}?{{ keep_query }}{% endif %}">{{ category.name }}</a></li>
+            <li{% if forloop.counter > 5 %} class="fold-extra"{% endif %}><a class="c{{ category|colour_code }}{% if category == active_category %} active{% endif %}"{% if category == active_category %} aria-current="page"{% endif %} href="{{ category.get_absolute_url }}{% if keep_query %}?{{ keep_query }}{% endif %}" aria-label="{{ category.name }}, {{ category.result_count }} program{{ category.result_count|pluralize }}">{{ category.name }} <span class="count">({{ category.result_count }})</span></a></li>
           {% endfor %}
         </ul>
         {% if categories|length > 5 %}
